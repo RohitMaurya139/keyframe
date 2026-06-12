@@ -291,6 +291,22 @@ async function runProduction({ jobId }) {
       const assets = await assetsTask;
       db.setAssets(jobId, assets);
 
+      // Caption cues for ON-SCREEN baking. Estimated from word count (the
+      // composer can't wait for measured VO without serializing the
+      // pipeline); the exported .srt later uses real measured durations.
+      const wc = (s) => (String(s || "").match(/\S+/g) || []).length;
+      const captionCues = job.captions_enabled === 0 ? [] : buildCues(
+        script.scenes
+          .filter((s) => s.voiceover && s.voiceover.trim())
+          .map((s) => ({
+            sceneId: s.id,
+            startSec: s.start,
+            durationSec: Math.min(s.duration, wc(s.voiceover) / 2.6 + 0.4),
+            sceneDurationSec: s.duration,
+            text: s.voiceover,
+          }))
+      ).map((c) => ({ start: Math.round(c.start * 10) / 10, end: Math.round(c.end * 10) / 10, text: c.text }));
+
       // ---- Compose + render (frame-pack styled), with the v1 budget wrapper.
       // Tier 1: with assets. Tier 2: asset-less. Tier 3: deterministic fallback.
       const budget = (Number(config.server.stageBudgetSec) || 240) * 1000;
@@ -301,7 +317,7 @@ async function runProduction({ jobId }) {
           (signal) => attemptLlmComposition({
             storyboard: sbRes.storyboard, dims, jobDir,
             assets, tracker, jobId, durationSec: duration,
-            label: "project-main", abortSignal: signal, framePack,
+            label: "project-main", abortSignal: signal, framePack, captionCues,
           }),
           budget, "project composition"
         );
@@ -317,7 +333,7 @@ async function runProduction({ jobId }) {
               (signal) => attemptLlmComposition({
                 storyboard: sbRes.storyboard, dims, jobDir,
                 assets: [], tracker, jobId, durationSec: duration,
-                label: "project-no-assets", abortSignal: signal, framePack,
+                label: "project-no-assets", abortSignal: signal, framePack, captionCues,
               }),
               budget, "project no-assets retry"
             );

@@ -33,7 +33,11 @@ Return ONLY a JSON object — no prose, no markdown fences:
       "emphasis": "<1-3 words in the headline to visually accent, or empty>",
       "animation": "<word-stagger|mask-reveal|blur-sharp|scale-pop|slide-up|slide-left|ken-burns-text|typewriter>",
       "visualMotif": "<short phrase describing the scene's non-text visual idea — e.g. 'pulsing gradient orb', 'rising bar chart', 'glowing line drawing itself'>",
-      "transitionOut": "<fade|slide-left|wipe|none>"
+      "layout": "<fullbleed|split-60-40|grid-2x2|centered-card>",
+      "beats": [
+        { "at": <seconds RELATIVE to the scene's own start>, "action": "<what happens — e.g. 'headline slams in word by word'>", "easing": "<gsap ease, e.g. back.out, expo.out, power3.inOut>" }
+      ],
+      "transitionOut": "<fade|slide-left|wipe|scale-through|hard-cut|none>"
     }
   ]
 }
@@ -53,6 +57,8 @@ Return ONLY a JSON object — no prose, no markdown fences:
 ## Writing principles
 
 - **One idea per scene.** If a scene has two ideas, split it.
+- **Beats are the scene's inner choreography.** 2–4 per scene: the FIRST beat is always at 0–0.15 (something visible enters immediately — no empty-ground moments); middle beats land content (subtext, counters, accents); the LAST beat starts the exit no later than 0.6s before the scene ends. `at` is relative to the scene's own start and must be < the scene's duration.
+- **`layout` picks the zone map**: `fullbleed` (one dominant element), `split-60-40` (content + visual), `grid-2x2` (cards/stats), `centered-card` (single framed statement).
 - **Every scene has motion.** `animation` is required and varied — do NOT use the same animation in consecutive scenes.
 - **Every scene has a visual motif** beyond text. `visualMotif` describes a non-text element that supports the headline (a shape, a line, a color shift, a particle burst).
 - **Emphasize high-impact words.** `emphasis` picks 1–3 words from the headline that should be visually accented (gradient color, scale pop, underline draw).

@@ -53,8 +53,10 @@ Match the user's message exactly.
 
 Every scene MUST satisfy:
 
-- ≥ 2 distinct motion elements (not just a fade)
+- ≥ 3 SIMULTANEOUSLY animated layers: a background layer in slow constant motion (drift, bloom breathe, gradient shift — finite repeats), a midground content layer (the headline/cards/asset), and a foreground accent layer (decoration, underline draw, particle, counter)
 - ≥ 1 non-text visual layer (gradient, particles, SVG shape, image, video)
+- Staggered reveal for at least one text block (split words or characters)
+- Every NUMBER on screen counts up/down to its value (gsap textContent tween with snap) — never appears statically
 - Different motion idiom vs the previous scene (if scene 1 is word-stagger, scene 2 should use something else)
 - Text with typographic hierarchy (not all same size/weight)
 
@@ -151,6 +153,11 @@ object-position: center;     /* center the crop */
 - Images/videos: `data-track-index` 0, 1 (bottom)
 - Overlays: 2, 3
 - Text/headlines: 5+ (on top, always readable)
+
+## Beats contract & captions
+
+- When a storyboard scene includes `beats[]`, the GSAP timeline MUST trigger each beat's action at absolute time `scene.start + beat.at` with the beat's easing. Beats are a TIMING CONTRACT, not a suggestion — a reviewer will scrub to those timestamps and expect the action to be happening.
+- When the user message includes `captionCues`, render them as a caption track on the TOP track-index: one bottom-anchored caption element per cue, visible from `cue.start` to `cue.end` (set opacity with `tl.set`, no slow fades), ≤2 lines, body-scale (never display-scale). Style captions as the active design system's smallest text treatment on a subtle contrast device. Captions must never overlap other text zones — reserve the bottom ~12% of the canvas for them.
 
 ## GSAP recipe shorthand
 

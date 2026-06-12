@@ -127,7 +127,7 @@ async function planAndFetchAssets({ jobDir, storyboard, flags, orientation, trac
 
 // ========== Composition + lint repair ==========
 
-async function composeWithLintRepair({ storyboard, dims, jobDir, availableAssets, tracker, abortSignal, framePack }) {
+async function composeWithLintRepair({ storyboard, dims, jobDir, availableAssets, tracker, abortSignal, framePack, captionCues }) {
   console.log(`[pipeline] composeWithLintRepair: calling composer (first pass)`);
   const first = await compose(storyboard, {
     width: dims.width, height: dims.height, fps: dims.fps,
@@ -136,6 +136,7 @@ async function composeWithLintRepair({ storyboard, dims, jobDir, availableAssets
     availableAssets,
     abortSignal,
     framePack,
+    captionCues,
   });
   tracker.addLlm({ inputTokens: first.tokensIn, outputTokens: first.tokensOut });
 
@@ -164,6 +165,7 @@ async function composeWithLintRepair({ storyboard, dims, jobDir, availableAssets
     duration: storyboard.durationSec, maxRetries: 1, availableAssets,
     abortSignal,
     framePack,
+    captionCues,
   });
   tracker.addLlm({ inputTokens: second.tokensIn, outputTokens: second.tokensOut });
 
@@ -182,11 +184,11 @@ async function composeWithLintRepair({ storyboard, dims, jobDir, availableAssets
 
 // ========== One attempt at full LLM comp + render with a given asset set ==========
 
-async function attemptLlmComposition({ storyboard, dims, jobDir, assets, tracker, jobId, durationSec, label, abortSignal, framePack }) {
+async function attemptLlmComposition({ storyboard, dims, jobDir, assets, tracker, jobId, durationSec, label, abortSignal, framePack, captionCues }) {
   const t0 = ms();
   console.log(`[pipeline] ${label}: compose start (assets=${assets.length}, framePack=${framePack || "none"})`);
   await composeWithLintRepair({
-    storyboard, dims, jobDir, availableAssets: assets, tracker, abortSignal, framePack,
+    storyboard, dims, jobDir, availableAssets: assets, tracker, abortSignal, framePack, captionCues,
   });
   console.log(`[pipeline] ${label}: compose done in ${ms() - t0}ms, render start`);
   tracker.addExternal("hyperframes_render");

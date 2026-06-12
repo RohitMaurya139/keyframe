@@ -52,6 +52,18 @@ function validate(storyboard, { duration, orientation }) {
       if (s.duration < 2 || s.duration > 15) errs.push(`scene[${i}] duration ${s.duration} out of [2,15]`);
       if (!s.kind) errs.push(`scene[${i}] missing kind`);
       if (!s.animation) errs.push(`scene[${i}] missing animation`);
+      // Beats are optional but, when present, sanitized rather than rejected:
+      // keep only well-formed beats inside the scene's own time window.
+      if (Array.isArray(s.beats)) {
+        s.beats = s.beats
+          .filter((b) => b && typeof b.at === "number" && b.at >= 0 && b.at < s.duration && typeof b.action === "string")
+          .slice(0, 5)
+          .map((b) => ({
+            at: Math.round(b.at * 100) / 100,
+            action: b.action.slice(0, 160),
+            easing: typeof b.easing === "string" ? b.easing.slice(0, 40) : "power2.out",
+          }));
+      }
       cursor += s.duration;
     });
     if (Math.abs(cursor - duration) > 0.01) {

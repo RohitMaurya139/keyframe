@@ -96,7 +96,7 @@ async function getSystemPromptWithSkills(framePack) {
   return parts.join("\n");
 }
 
-function buildUser(storyboard, { width, height, fps, availableAssets, framePack }) {
+function buildUser(storyboard, { width, height, fps, availableAssets, framePack, captionCues }) {
   // With a design system active, the storyboard's palette/fontFamily are a
   // competing signal — remove them entirely rather than asking the model to
   // ignore them.
@@ -121,6 +121,12 @@ function buildUser(storyboard, { width, height, fps, availableAssets, framePack 
       ? "Use these local asset paths (and ONLY these) in any <img> or <video> src attributes."
       : "No assets pre-fetched. Do NOT include any <img> or <video> tags.",
   ];
+
+  if (captionCues && captionCues.length) {
+    lines.push("");
+    lines.push("captionCues (render as the caption track per the Beats contract & captions section):");
+    lines.push(JSON.stringify(captionCues));
+  }
 
   if (framePack) {
     const tokens = frameRegistry.getPackTokens(framePack);
@@ -208,11 +214,11 @@ function quickCheck(indexHtml, metaJsonStr, { width, height, duration, assets })
   return errs;
 }
 
-async function compose(storyboard, { width, height, fps, duration, maxRetries, availableAssets, abortSignal, framePack }) {
+async function compose(storyboard, { width, height, fps, duration, maxRetries, availableAssets, abortSignal, framePack, captionCues }) {
   const t0 = Date.now();
-  console.log(`[composer] start (duration=${duration}s, assets=${(availableAssets||[]).length}, maxRetries=${maxRetries}, framePack=${framePack || "none"})`);
+  console.log(`[composer] start (duration=${duration}s, assets=${(availableAssets||[]).length}, maxRetries=${maxRetries}, framePack=${framePack || "none"}, captions=${(captionCues||[]).length})`);
   const system = await getSystemPromptWithSkills(framePack);
-  const user = buildUser(storyboard, { width, height, fps, availableAssets, framePack });
+  const user = buildUser(storyboard, { width, height, fps, availableAssets, framePack, captionCues });
   const tries = (maxRetries ?? 2) + 1;
   let totalIn = 0, totalOut = 0;
   let lastErrors = [];

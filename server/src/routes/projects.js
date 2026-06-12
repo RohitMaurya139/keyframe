@@ -100,6 +100,7 @@ function validateCreate(body, { hasUpload = false } = {}) {
 
   out.voiceStyle = typeof body.voiceStyle === "string" ? body.voiceStyle.slice(0, 200) : null;
   out.autopilot = body.autopilot === true || body.autopilot === "true";
+  out.captions = !(body.captions === false || body.captions === "false"); // default on
 
   if (body.framePack != null && body.framePack !== "auto") {
     if (typeof body.framePack !== "string" || frameRegistry.resolvePack(body.framePack) == null) {
@@ -152,6 +153,7 @@ function buildRouter({ enqueueIntake, enqueueProduction }) {
       framePack: out.framePack === "auto" ? null : out.framePack,
       voiceStyle: out.voiceStyle,
       autopilot: out.autopilot,
+      captionsEnabled: out.captions,
       uploadPath,
       intent: {
         prompt: out.prompt,

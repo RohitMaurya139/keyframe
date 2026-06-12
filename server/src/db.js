@@ -121,6 +121,7 @@ module.exports = {
       finished_at: null,
       client_ip: job.client_ip,
       voice_style: job.voiceStyle || null,
+      captions_enabled: job.captionsEnabled === false ? 0 : 1,
       upload_path: job.uploadPath || null,
       intent: job.intent || null,
       autopilot: job.autopilot ? 1 : 0,
