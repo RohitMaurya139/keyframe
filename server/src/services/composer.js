@@ -142,9 +142,18 @@ function buildUser(storyboard, { width, height, fps, availableAssets, framePack,
 }
 
 function parseEnvelope(text) {
+  // Sentinel format (primary). A 20-30KB HTML document inside a JSON string
+  // breaks escaping reliably at this size; raw blocks between sentinels have
+  // no escaping to get wrong.
+  const m = String(text).match(/===HTML===\s*([\s\S]*?)\s*===META===\s*([\s\S]*?)\s*(?:===END===|$)/);
+  if (m && m[1].trim() && m[2].trim()) {
+    return { indexHtml: m[1].trim(), metaJson: m[2].trim() };
+  }
+
+  // Legacy JSON envelope fallback (older models / cached behaviors).
   const obj = extractFirstJsonObject(text);
   if (typeof obj.indexHtml !== "string" || typeof obj.metaJson !== "string") {
-    throw new Error("envelope missing indexHtml or metaJson string fields");
+    throw new Error("envelope missing ===HTML===/===META=== sentinels and indexHtml/metaJson fields");
   }
   return obj;
 }
@@ -230,7 +239,7 @@ async function compose(storyboard, { width, height, fps, duration, maxRetries, a
     const { text, tokensIn, tokensOut } = await openrouter.chat({
       system,
       user: augmentedUser,
-      jsonMode: true,
+      jsonMode: false, // sentinel envelope — forcing json_object would fight the format
       stage: "composer",
       signal: abortSignal,
     });
@@ -244,7 +253,7 @@ async function compose(storyboard, { width, height, fps, duration, maxRetries, a
     } catch (e) {
       lastErrors = [`envelope parse error: ${e.message}`];
       console.warn(`[composer] attempt ${i} parse failed: ${e.message.slice(0, 200)}`);
-      augmentedUser = `${user}\n\nPrevious reply could not be parsed: ${e.message}\nReturn ONLY the JSON object with indexHtml and metaJson.`;
+      augmentedUser = `${user}\n\nPrevious reply could not be parsed: ${e.message}\nReturn ONLY the sentinel-delimited response: ===HTML=== <the html> ===META=== <the meta json> ===END===`;
       continue;
     }
 
