@@ -81,4 +81,30 @@ function getShowcasePath(name) {
   return fs.existsSync(p) ? p : null;
 }
 
-module.exports = { listPacks, defaultPack, resolvePack, getFrameMd, getShowcasePath, FRAMES_DIR };
+// Extract machine-usable tokens from FRAME.md's YAML frontmatter: the exact
+// color hexes and font families the pack permits. Used to append a hard
+// "palette law" to the composer prompt — listing concrete values survives
+// long-prompt attention dilution far better than prose rules do.
+function getPackTokens(name) {
+  const md = getFrameMd(name);
+  if (!md) return null;
+  const fmMatch = md.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  const fm = fmMatch ? fmMatch[1] : md;
+
+  const colors = {};
+  const colorsBlock = fm.match(/^colors:\r?\n((?:[ \t]+.+\r?\n?)+)/m);
+  if (colorsBlock) {
+    for (const line of colorsBlock[1].split(/\r?\n/)) {
+      const m = line.match(/^[ \t]+([\w-]+):\s*"(#[0-9a-fA-F]{6})"/);
+      if (m) colors[m[1]] = m[2].toUpperCase();
+    }
+  }
+
+  const fonts = [...new Set(
+    [...fm.matchAll(/fontFamily:\s*"([^"]+)"/g)].map((m) => m[1])
+  )];
+
+  return { name, colors, fonts };
+}
+
+module.exports = { listPacks, defaultPack, resolvePack, getFrameMd, getShowcasePath, getPackTokens, FRAMES_DIR };

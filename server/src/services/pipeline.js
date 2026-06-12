@@ -435,4 +435,4 @@ async function runJob({
   }
 }
 
-module.exports = { runJob };
+module.exports = { runJob, withBudget, attemptLlmComposition, mixAudioIntoVideo };

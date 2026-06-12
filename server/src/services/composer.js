@@ -15,13 +15,34 @@ const SYSTEM_BASE = fs.readFileSync(
   "utf8"
 );
 
+// "Allowed colors: ..." with concrete hexes survives long-prompt attention
+// dilution far better than prose like "use the design system's palette".
+function paletteLaw(framePack) {
+  const tokens = frameRegistry.getPackTokens(framePack);
+  if (!tokens || !Object.keys(tokens.colors).length) return null;
+  const colorList = Object.entries(tokens.colors).map(([k, v]) => `${v} (${k})`).join(", ");
+  const lines = [
+    "## HARD PALETTE LAW — zero tolerance",
+    "",
+    `The ONLY colors permitted anywhere in the composition — backgrounds, text, borders, shadows, gradients, SVG fills/strokes — are: ${colorList}.`,
+    "Opacity/rgba variants of these exact hues are allowed (blooms, overlays); any other hex/hsl/named color is a DEFECT. In particular: NO dark-navy gradients, NO neon cyan/purple accents, NO generic 'AI video' styling — those belong to other design systems, not this one.",
+  ];
+  if (tokens.fonts.length) {
+    lines.push(`The ONLY font families permitted: ${tokens.fonts.join(", ")} (plus generic fallbacks). Load exactly these via ONE Google Fonts <link>. Inter/Roboto are NOT automatically allowed — only if listed here.`);
+  }
+  return lines.join("\n");
+}
+
 async function getSystemPromptWithSkills(framePack) {
   const [skills, catalog] = await Promise.all([
     getComposerSkills().catch(() => ""),
     getCatalogSummary().catch(() => ""),
   ]);
   const parts = [SYSTEM_BASE];
-  if (catalog) {
+  const frameMd = framePack ? frameRegistry.getFrameMd(framePack) : null;
+  // Catalog blocks ship their own (foreign) styling — they'd puncture the
+  // design system, so they're only offered when no pack is active.
+  if (catalog && !frameMd) {
     parts.push("", "---", "", "# Reference: HyperFrames Catalog");
     parts.push("");
     parts.push("Pre-built blocks, examples, and components are available from the HyperFrames registry. You may reference BLOCKS by adding them to the HTML via:");
@@ -49,7 +70,6 @@ async function getSystemPromptWithSkills(framePack) {
   // Inject the selected frame pack's FRAME.md as the authoritative design
   // system. Placed LAST so it wins any stylistic conflict with the generic
   // guidance above; the lint-enforced technical constraints are untouched.
-  const frameMd = framePack ? frameRegistry.getFrameMd(framePack) : null;
   if (frameMd) {
     parts.push("", "---", "", `# DESIGN SYSTEM — "${framePack}" (AUTHORITATIVE)`);
     parts.push("");
@@ -66,15 +86,29 @@ async function getSystemPromptWithSkills(framePack) {
     parts.push("- The design spec below covers composition only; motion is yours. Keep the visual-richness checklist from earlier, but express it ENTIRELY with this system's atoms — animate ITS decorations, ITS rules/blooms/shadows, ITS type. Do not import foreign visual elements (e.g. no neon gradients on a parchment system, no soft blurred shadows on a hard-shadow system).");
     parts.push("");
     parts.push(frameMd);
+    const law = paletteLaw(framePack);
+    if (law) {
+      parts.push("", law);
+    }
   }
 
   return parts.join("\n");
 }
 
-function buildUser(storyboard, { width, height, fps, availableAssets }) {
+function buildUser(storyboard, { width, height, fps, availableAssets, framePack }) {
+  // With a design system active, the storyboard's palette/fontFamily are a
+  // competing signal — remove them entirely rather than asking the model to
+  // ignore them.
+  let sb = storyboard;
+  if (framePack) {
+    sb = { ...storyboard };
+    delete sb.palette;
+    delete sb.fontFamily;
+  }
+
   const lines = [
     "Storyboard:",
-    JSON.stringify(storyboard, null, 2),
+    JSON.stringify(sb, null, 2),
     "",
     `Composition dimensions: ${width}x${height} at ${fps}fps.`,
     `Total duration: ${storyboard.durationSec}s.`,
@@ -85,9 +119,18 @@ function buildUser(storyboard, { width, height, fps, availableAssets }) {
     (availableAssets && availableAssets.length)
       ? "Use these local asset paths (and ONLY these) in any <img> or <video> src attributes."
       : "No assets pre-fetched. Do NOT include any <img> or <video> tags.",
-    "",
-    "Produce the JSON with indexHtml and metaJson strings now.",
   ];
+
+  if (framePack) {
+    const tokens = frameRegistry.getPackTokens(framePack);
+    lines.push("");
+    lines.push(`CRITICAL: render this video entirely in the "${framePack}" DESIGN SYSTEM defined at the end of the system prompt. Atoms sacred, composition free.`);
+    if (tokens && Object.keys(tokens.colors).length) {
+      lines.push(`The ONLY allowed colors: ${Object.values(tokens.colors).join(", ")}. The ONLY allowed fonts: ${tokens.fonts.join(", ") || "per the design system"}. Scene backgrounds must be the system's ground colors — never dark navy, never generic gradients.`);
+    }
+  }
+
+  lines.push("", "Produce the JSON with indexHtml and metaJson strings now.");
   return lines.join("\n");
 }
 
@@ -169,7 +212,7 @@ async function compose(storyboard, { width, height, fps, duration, maxRetries, a
   const t0 = Date.now();
   console.log(`[composer] start (duration=${duration}s, assets=${(availableAssets||[]).length}, maxRetries=${maxRetries}, framePack=${framePack || "none"})`);
   const system = await getSystemPromptWithSkills(framePack);
-  const user = buildUser(storyboard, { width, height, fps, availableAssets });
+  const user = buildUser(storyboard, { width, height, fps, availableAssets, framePack });
   const tries = (maxRetries ?? 2) + 1;
   let totalIn = 0, totalOut = 0;
   let lastErrors = [];

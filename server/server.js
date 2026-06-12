@@ -9,12 +9,14 @@ const config = require("./src/config");
 const db = require("./src/db");
 const janitor = require("./src/services/janitor");
 const pipeline = require("./src/services/pipeline");
+const projectPipeline = require("./src/services/project_pipeline");
 const skills = require("./src/services/skills");
 const catalog = require("./src/services/catalog");
 const healthRouter = require("./src/routes/health");
 const jobsRouter = require("./src/routes/jobs");
 const framesRouter = require("./src/routes/frames");
 const { buildRouter: buildGenerateRouter } = require("./src/routes/generate");
+const { buildRouter: buildProjectsRouter } = require("./src/routes/projects");
 
 async function loadQueue() {
   // p-queue v6 is CommonJS; v7+ is ESM. Support both.
@@ -39,6 +41,22 @@ async function main() {
     });
   }
 
+  function enqueueProduction(jobId) {
+    queue.add(() => projectPipeline.runProduction({ jobId })).catch((e) => {
+      console.error(`[queue] unhandled production error: ${e.message}`);
+    });
+  }
+
+  function enqueueIntake(jobId, opts = {}) {
+    queue.add(() => projectPipeline.runIntake({
+      jobId,
+      skipBrief: opts.skipBrief === true,
+      onApproved: enqueueProduction, // autopilot resumes automatically
+    })).catch((e) => {
+      console.error(`[queue] unhandled intake error: ${e.message}`);
+    });
+  }
+
   const app = express();
   app.disable("x-powered-by");
   app.set("trust proxy", true);
@@ -48,6 +66,7 @@ async function main() {
   app.use("/api", jobsRouter);
   app.use("/api", framesRouter);
   app.use("/api", buildGenerateRouter({ enqueue }));
+  app.use("/api", buildProjectsRouter({ enqueueIntake, enqueueProduction }));
 
   // Static: frontend + rendered videos.
   const publicDir = path.join(config.paths.root, "public");

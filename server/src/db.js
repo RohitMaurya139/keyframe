@@ -67,6 +67,7 @@ function shape(j) {
   if (!j) return null;
   return {
     jobId: j.id,
+    kind: j.kind || "generate",
     status: j.status,
     progress: j.progress,
     videoUrl: j.video_url,
@@ -86,6 +87,9 @@ function shape(j) {
     finalAttempt: j.final_attempt || null,
     usage: j.usage || null,
     stageTimings: j.stage_timings || null,
+    brief: j.brief || null,
+    script: j.script || null,
+    scriptWarnings: j.script_warnings || null,
   };
 }
 
@@ -93,6 +97,7 @@ module.exports = {
   insert(job) {
     const rec = {
       id: job.id,
+      kind: job.kind || "generate",
       prompt: job.prompt,
       duration: job.duration,
       orientation: job.orientation,
@@ -112,8 +117,50 @@ module.exports = {
       started_at: null,
       finished_at: null,
       client_ip: job.client_ip,
+      voice_style: job.voiceStyle || null,
+      intent: job.intent || null,
+      autopilot: job.autopilot ? 1 : 0,
+      brief: null,
+      script: null,
+      script_warnings: null,
     };
     jobs.set(job.id, rec);
+    scheduleWrite();
+  },
+
+  // ---- project (script-checkpoint) lifecycle ----
+
+  // Intake finished: brief + draft script ready, pipeline paused for review.
+  markScriptReview(id, { brief, script, warnings, framePack, usage, stageTimings }) {
+    const j = jobs.get(id); if (!j) return;
+    j.status = "script_review";
+    j.progress = "script_review";
+    j.brief = brief;
+    j.script = script;
+    j.script_warnings = warnings || [];
+    if (framePack) j.frame_pack = framePack;
+    if (usage) j.usage = usage;
+    if (stageTimings) j.stage_timings = { ...(j.stage_timings || {}), ...stageTimings };
+    scheduleWrite();
+  },
+
+  // User approved (possibly edited) script: store it and requeue.
+  markApproved(id, { script }) {
+    const j = jobs.get(id); if (!j) return;
+    j.script = script;
+    j.status = "queued";
+    j.progress = "approved";
+    scheduleWrite();
+  },
+
+  // Regenerate: requeue intake, optionally discarding the stored brief.
+  markRequeued(id, { clearBrief = false, progress = "regenerate" } = {}) {
+    const j = jobs.get(id); if (!j) return;
+    j.status = "queued";
+    j.progress = progress;
+    j.script = null;
+    j.error = null;
+    if (clearBrief) j.brief = null;
     scheduleWrite();
   },
 
