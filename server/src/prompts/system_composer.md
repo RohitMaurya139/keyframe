@@ -157,7 +157,7 @@ object-position: center;     /* center the crop */
 ## Beats contract & captions
 
 - When a storyboard scene includes `beats[]`, the GSAP timeline MUST trigger each beat's action at absolute time `scene.start + beat.at` with the beat's easing. Beats are a TIMING CONTRACT, not a suggestion — a reviewer will scrub to those timestamps and expect the action to be happening.
-- When the user message includes `captionCues`, render them as a caption track on the TOP track-index: one bottom-anchored caption element per cue, visible from `cue.start` to `cue.end` (set opacity with `tl.set`, no slow fades), ≤2 lines, body-scale (never display-scale). Style captions as the active design system's smallest text treatment on a subtle contrast device. Captions must never overlap other text zones — reserve the bottom ~12% of the canvas for them.
+- When the user message includes `captionCues`, render them as a caption track on the TOP track-index: one bottom-anchored caption element per cue, visible from `cue.start` to `cue.end` (set opacity with `tl.set`, no slow fades), ≤2 lines, body-scale (never display-scale). Style captions as the active design system's smallest text treatment on a subtle contrast device. The caption element is HORIZONTALLY CENTERED on the full canvas width, sits above every other element, and is never clipped by any card/panel boundary. Reserve the bottom ~12% of the canvas exclusively for captions — no other content there.
 
 ## GSAP recipe shorthand
 
