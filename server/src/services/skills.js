@@ -35,6 +35,7 @@ const SKILL_FILES = {
   narration:     "skills/hyperframes/references/narration.md",
   videoComposition: "skills/hyperframes/references/video-composition.md",
   transitionCatalog: "skills/hyperframes/references/transitions/catalog.md",
+  css3d:         "skills/hyperframes/references/transitions/css-3d.md",
 
   // GSAP primer.
   gsap:         "skills/gsap/SKILL.md",
@@ -120,10 +121,10 @@ async function getSkillBundle(keys) {
  * reserved for explicit opt-in via getFullComposerSkills().
  */
 async function getComposerSkills() {
-  // Core guide + the motion/css/transition references. Now that skills load
-  // from disk this costs no latency, only ~5k extra input tokens — worth it
-  // for the visibly richer motion vocabulary.
-  return await getSkillBundle(["main", "motion", "cssPatterns", "transitions"]);
+  // Core guide + the motion/css/transition references + the CSS-3D
+  // transition catalog. Loaded from disk — no latency, ~6k extra input
+  // tokens, visibly richer motion and depth vocabulary.
+  return await getSkillBundle(["main", "motion", "cssPatterns", "transitions", "css3d"]);
 }
 
 /**

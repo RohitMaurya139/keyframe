@@ -33,7 +33,7 @@ Match the user's message exactly.
 
 1. Full HTML5 doc: `<!DOCTYPE html>…<html>…<head>…<body>…</body></html>`.
 2. `<head>` has `<meta charset="utf-8">` and `<title>`. Optional: ONE Google Fonts `<link>` (Inter / Roboto only).
-3. Include GSAP CDN: `<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>`. GSAP is the primary sequencing tool. You MAY additionally include anime.js (`<script src="https://cdn.jsdelivr.net/npm/animejs@4.0.2/lib/anime.iife.min.js"></script>`) for compact SVG/DOM flourishes ONLY under the HyperFrames adapter contract: every anime instance is created synchronously with `autoplay: false`, finite loops, and pushed onto `window.__hfAnime` (`window.__hfAnime = window.__hfAnime || []; window.__hfAnime.push(anim);`) so the renderer can seek it. CSS keyframe animations are fully supported and seeked deterministically. No other external scripts.
+3. Include GSAP CDN: `<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>`. GSAP is the primary sequencing tool. You MAY additionally include anime.js (`<script src="https://cdn.jsdelivr.net/npm/animejs@4.0.2/lib/anime.iife.min.js"></script>`) for compact SVG/DOM flourishes ONLY under the HyperFrames adapter contract: every anime instance is created synchronously with `autoplay: false`, finite loops, and pushed onto `window.__hfAnime` (`window.__hfAnime = window.__hfAnime || []; window.__hfAnime.push(anim);`) so the renderer can seek it. CSS keyframe animations are fully supported and seeked deterministically. You MAY include ONE Three.js WebGL canvas layer (see "True 3D" section). No other external scripts.
 4. Root element (first child of `<body>`):
    ```html
    <div id="root" class="composition"
@@ -171,6 +171,35 @@ object-position: center;     /* center the crop */
 - Images/videos: `data-track-index` 0, 1 (bottom)
 - Overlays: 2, 3
 - Text/headlines: 5+ (on top, always readable)
+
+## 3D — depth is mandatory, true 3D is encouraged
+
+CSS 3D (the reliable workhorse — use in EVERY video):
+- Give scene containers `perspective: 1200px` so children can move in real depth.
+- Hero entrances in 3D: cards/screenshots enter with `rotationY: 28 → 0` (or rotationX) + `translateZ`, settling with `expo.out` — like app-store hero shots. GSAP: use `transformPerspective: 1200` on the tween when the parent lacks perspective.
+- Parallax depth stacks: stack 2-3 layers at different `translateZ` values and drift them at different rates — instant depth.
+- Floating product screenshots: a persistent gentle tilt (`rotationX: 6, rotationY: -8`) with a soft ground shadow beneath, slowly breathing.
+- 3D scene transitions (pick from the css-3d catalog): hinge flips (rotateX 90 at the top edge), cube spins between scenes, door swings. At least ONE scene handoff per video should be a 3D transition.
+- Every video must contain at least one genuine 3D moment — a flat video is a failed video.
+
+True 3D (optional, ONE WebGL layer max — use when the subject suits it: tech, product, abstract):
+A full-duration background `<canvas>` clip on track 0 running Three.js under the HyperFrames adapter contract:
+```html
+<canvas id="gl" class="clip" data-start="0" data-duration="<DURATION>" data-track-index="0" width="<W>" height="<H>"></canvas>
+<script type="module">
+  import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.181.2/+esm";
+  const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById("gl"), alpha: true, antialias: true });
+  renderer.setSize(<W>, <H>, false); renderer.setPixelRatio(1);
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(35, <W>/<H>, 0.1, 100); camera.position.set(0, 0, 6);
+  // ... procedural geometry only (icosahedra, torus knots, particle points, wireframes),
+  // materials colored ONLY from the design system palette ...
+  function renderAt(t) { /* derive ALL motion from t */ renderer.render(scene, camera); }
+  window.addEventListener("hf-seek", (e) => renderAt(e.detail.time));
+  renderAt(window.__hfThreeTime || 0);
+</script>
+```
+Hard rules for the WebGL layer: render ONLY from `hf-seek` time (never rAF/Date.now/clock deltas), procedural geometry only (no external models/textures/HDRIs), pinned size and pixelRatio 1, subtle and slow — it is a backdrop, not the show. Text and cards stay in DOM layers above it.
 
 ## Beats contract & captions
 
