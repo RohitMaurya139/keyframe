@@ -149,6 +149,7 @@ function build() {
   cfg.paths.jobsDir = path.resolve(root, cfg.paths.jobsDir);
   cfg.paths.videosDir = path.resolve(root, cfg.paths.videosDir);
   cfg.paths.dbFile = path.resolve(root, cfg.paths.dbFile);
+  cfg.paths.uploadsDir = path.resolve(root, cfg.paths.uploadsDir || "uploads");
   cfg.paths.root = root;
 
   return Object.freeze(cfg);

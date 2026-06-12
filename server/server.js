@@ -28,6 +28,7 @@ async function main() {
   // Ensure working dirs exist.
   fs.mkdirSync(config.paths.jobsDir, { recursive: true });
   fs.mkdirSync(config.paths.videosDir, { recursive: true });
+  fs.mkdirSync(config.paths.uploadsDir, { recursive: true });
 
   const PQueue = await loadQueue();
   const concurrency = Math.max(1, Number(config.server.jobConcurrency) || 1);

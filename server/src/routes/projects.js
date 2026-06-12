@@ -10,7 +10,9 @@
 // the ingest workers land).
 
 const express = require("express");
+const path = require("node:path");
 const rateLimit = require("express-rate-limit");
+const multer = require("multer");
 const { customAlphabet } = require("nanoid");
 const config = require("../config");
 const db = require("../db");
@@ -19,25 +21,62 @@ const { validateScript, normalizeScript } = require("../services/script");
 
 const nanoid = customAlphabet("0123456789abcdefghijklmnopqrstuvwxyz", 10);
 
+// Reference-video uploads (multipart). JSON bodies bypass multer entirely.
+const VIDEO_MIMES = new Set(["video/mp4", "video/quicktime", "video/webm"]);
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, config.paths.uploadsDir),
+    filename: (_req, file, cb) => {
+      const ext = (path.extname(file.originalname) || ".mp4").toLowerCase().slice(0, 8);
+      cb(null, `${nanoid()}${ext}`);
+    },
+  }),
+  limits: { fileSize: (config.ingest?.maxUploadMb || 200) * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    if (VIDEO_MIMES.has(file.mimetype)) cb(null, true);
+    else cb(new Error(`unsupported video type ${file.mimetype} (mp4/mov/webm only)`));
+  },
+});
+
+function maybeMultipart(req, res, next) {
+  if (req.is("multipart/form-data")) {
+    upload.single("referenceVideo")(req, res, (err) => {
+      if (err) return res.status(400).json({ error: "upload failed", details: [err.message] });
+      next();
+    });
+  } else {
+    next();
+  }
+}
+
 function clientIp(req) {
   const xff = req.headers["x-forwarded-for"];
   if (typeof xff === "string" && xff.length) return xff.split(",")[0].trim();
   return req.ip || req.socket?.remoteAddress || "unknown";
 }
 
-function validateCreate(body) {
+function validateCreate(body, { hasUpload = false } = {}) {
   const errs = [];
   const out = {};
   if (typeof body !== "object" || body === null) return { errs: ["body must be JSON object"], out };
 
-  // Phase 2: prompt is the only ingest source. Phase 3 relaxes this to
-  // "at least one of prompt / referenceVideo / websiteUrl".
-  if (typeof body.prompt !== "string" || body.prompt.trim().length < 10) {
-    errs.push("prompt must be a string of at least 10 characters");
-  } else if (body.prompt.trim().length > 4000) {
-    errs.push("prompt must be at most 4000 characters");
-  } else {
-    out.prompt = body.prompt.trim();
+  // Multi-modal: at least one of prompt / referenceVideo / websiteUrl.
+  out.prompt = "";
+  if (typeof body.prompt === "string" && body.prompt.trim()) {
+    const p = body.prompt.trim();
+    if (p.length < 10) errs.push("prompt, when given, must be at least 10 characters");
+    else if (p.length > 4000) errs.push("prompt must be at most 4000 characters");
+    else out.prompt = p;
+  }
+
+  if (typeof body.websiteUrl === "string" && body.websiteUrl.trim()) {
+    const u = body.websiteUrl.trim().slice(0, 2000);
+    if (!/^https?:\/\/.+\..+/i.test(u)) errs.push("websiteUrl must be a valid http(s) URL");
+    else out.websiteUrl = u;
+  }
+
+  if (!out.prompt && !out.websiteUrl && !hasUpload) {
+    errs.push("provide at least one of: prompt, websiteUrl, referenceVideo");
   }
 
   const d = body.duration == null ? 30 : Number(body.duration);
@@ -72,10 +111,6 @@ function validateCreate(body) {
     out.framePack = "auto"; // brief suggests; registry default as last resort
   }
 
-  if (typeof body.websiteUrl === "string" && body.websiteUrl.trim()) {
-    out.websiteUrl = body.websiteUrl.trim().slice(0, 2000);
-  }
-
   return { errs, out };
 }
 
@@ -91,8 +126,9 @@ function buildRouter({ enqueueIntake, enqueueProduction }) {
     message: { error: "rate limit exceeded", hint: "try again in an hour" },
   });
 
-  router.post("/projects", limiter, (req, res) => {
-    const { errs, out } = validateCreate(req.body || {});
+  router.post("/projects", limiter, maybeMultipart, (req, res) => {
+    const uploadPath = req.file ? req.file.path : null;
+    const { errs, out } = validateCreate(req.body || {}, { hasUpload: !!uploadPath });
     if (errs.length) return res.status(400).json({ error: "invalid request", details: errs });
 
     const since = Date.now() - 24 * 60 * 60 * 1000;
@@ -116,9 +152,11 @@ function buildRouter({ enqueueIntake, enqueueProduction }) {
       framePack: out.framePack === "auto" ? null : out.framePack,
       voiceStyle: out.voiceStyle,
       autopilot: out.autopilot,
+      uploadPath,
       intent: {
         prompt: out.prompt,
         websiteUrl: out.websiteUrl || null,
+        hasReferenceVideo: !!uploadPath,
         preferences: {
           duration: out.duration,
           orientation: out.orientation,

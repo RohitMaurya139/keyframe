@@ -18,6 +18,8 @@ const db = require("../db");
 const { UsageTracker } = require("./usage");
 const { generateBrief } = require("./brief");
 const { generateScript, validateScript, normalizeScript } = require("./script");
+const { understandWebsite } = require("./ingest/website");
+const { transcribeVideo } = require("./ingest/transcribe");
 const { generateStoryboard } = require("./storyboard");
 const { buildFallback } = require("./fallback");
 const { synthesize: ttsSynthesize } = require("./tts");
@@ -40,8 +42,6 @@ async function runIntake({ jobId, onApproved, skipBrief = false }) {
   db.markStarted(jobId);
 
   try {
-    // Phase 3 will add transcription + website workers here; for now the
-    // intent is the normalized prompt + preferences captured at create time.
     const intent = job.intent || {
       prompt: job.prompt,
       preferences: {
@@ -51,6 +51,43 @@ async function runIntake({ jobId, onApproved, skipBrief = false }) {
         framePack: job.frame_pack || "auto",
       },
     };
+
+    // ---- Multi-modal ingest: website + reference video, in parallel.
+    // Each worker degrades to null on failure — a dead URL must not kill the
+    // project when a prompt is also present.
+    if ((intent.websiteUrl || job.upload_path) && !intent.__ingested) {
+      const t0 = ms();
+      db.setProgress(jobId, "ingest");
+      const workDir = path.join(jobDirFor(jobId), "ingest");
+
+      const websiteTask = intent.websiteUrl
+        ? understandWebsite({ url: intent.websiteUrl, workDir, timeoutMs: config.ingest?.websiteTimeoutMs || 60_000 })
+            .catch((e) => { console.warn(`[project] website ingest failed: ${e.message}`); return null; })
+        : Promise.resolve(null);
+
+      const videoTask = job.upload_path
+        ? transcribeVideo({ videoPath: job.upload_path, workDir, tracker })
+            .catch((e) => { console.warn(`[project] video ingest failed: ${e.message}`); return null; })
+        : Promise.resolve(null);
+
+      const [website, video] = await Promise.all([websiteTask, videoTask]);
+      if (website) {
+        intent.website = {
+          url: website.url, title: website.title, description: website.description,
+          headings: website.headings, bodyText: website.bodyText,
+          brandColors: website.brandColors, ogImage: website.ogImage,
+        };
+        job.website_screenshot = website.screenshotPath;
+      }
+      if (video) intent.video = video;
+      intent.__ingested = true;
+      job.intent = intent; // persist enriched intent for regenerate runs
+      timings.ingestMs = ms() - t0;
+
+      if (!intent.prompt && !website && !video) {
+        throw new Error("ingest produced no usable signal (prompt empty, website and video ingest both failed)");
+      }
+    }
 
     let brief;
     if (skipBrief && job.brief) {
