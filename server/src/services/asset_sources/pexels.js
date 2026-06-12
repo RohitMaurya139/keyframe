@@ -55,4 +55,4 @@ async function search({ query, type, orientation, limit = 5 }) {
   return [];
 }
 
-module.exports = { name: "pexels", types: ["image", "video"], search };
+module.exports = { name: "pexels", types: ["image", "video"], available: () => !!apiKey(), search };

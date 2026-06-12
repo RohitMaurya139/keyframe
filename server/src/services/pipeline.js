@@ -397,6 +397,7 @@ async function runJob({
       const fb = buildFallback({
         prompt, duration, orientation, width, height, fps,
         storyboard: sbRes.storyboard,
+        packTokens: framePack ? require("./frame_registry").getPackTokens(framePack) : null,
       });
       fs.writeFileSync(path.join(jobDir, "index.html"), fb.indexHtml, "utf8");
       fs.writeFileSync(path.join(jobDir, "meta.json"), fb.metaJson, "utf8");

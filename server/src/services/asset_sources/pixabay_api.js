@@ -68,4 +68,4 @@ async function search({ query, type, orientation, limit = 5 }) {
   return [];
 }
 
-module.exports = { name: "pixabay", types: ["image", "video"], search };
+module.exports = { name: "pixabay", types: ["image", "video"], available: () => !!apiKey(), search };

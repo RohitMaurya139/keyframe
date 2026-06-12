@@ -106,4 +106,4 @@ async function search({ query, type, limit = 5 }) {
   }
 }
 
-module.exports = { name: "pixabay_scrape", types: ["image", "vector"], search };
+module.exports = { name: "pixabay_scrape", types: ["image", "vector"], available: () => !!findChrome(), search };

@@ -91,6 +91,8 @@ function shape(j) {
     script: j.script || null,
     scriptWarnings: j.script_warnings || null,
     assets: j.assets || null,
+    captions: j.captions || null,
+    srtUrl: j.srt_url || null,
   };
 }
 
@@ -159,6 +161,14 @@ module.exports = {
   setAssets(id, assets) {
     const j = jobs.get(id); if (!j) return;
     j.assets = assets || [];
+    scheduleWrite();
+  },
+
+  // Caption cues + exported .srt URL.
+  setCaptions(id, { cues, srtUrl }) {
+    const j = jobs.get(id); if (!j) return;
+    j.captions = cues || [];
+    j.srt_url = srtUrl || null;
     scheduleWrite();
   },
 

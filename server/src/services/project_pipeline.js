@@ -22,12 +22,13 @@ const { understandWebsite } = require("./ingest/website");
 const { transcribeVideo } = require("./ingest/transcribe");
 const { generateStoryboard } = require("./storyboard");
 const { buildFallback } = require("./fallback");
-const { synthesize: ttsSynthesize } = require("./tts");
+const { synthesizeFitted } = require("./vo_fit");
+const { buildCues, writeSrt } = require("./captions");
 const { fetchMusic } = require("./audio_sources");
 const { VALID_VOICES } = require("./audio_planner");
 const { render } = require("./renderer");
 const { withBudget, attemptLlmComposition, mixAudioIntoVideo, fallbackQueriesFor } = require("./pipeline");
-const { acquire } = require("./asset_sources");
+const { acquire, hasProviderFor } = require("./asset_sources");
 
 function jobDirFor(jobId) { return path.join(config.paths.jobsDir, jobId); }
 function ms() { return Date.now(); }
@@ -168,8 +169,17 @@ function pickVoice(job, script) {
 // prompt size sane. Returns the availableAssets manifest the composer sees.
 async function acquireScriptAssets({ script, jobDir, orientation, tracker }) {
   const wanted = [];
+  const videoOk = hasProviderFor("video");
   for (const scene of script.scenes) {
-    for (const need of scene.assetNeeds || []) wanted.push({ scene, need });
+    for (const need of scene.assetNeeds || []) {
+      // No video provider configured (keys missing)? A still works almost as
+      // well as a loop for backgrounds — downgrade rather than come up empty.
+      if (need.type === "video" && !videoOk) {
+        wanted.push({ scene, need: { ...need, type: "image" } });
+      } else {
+        wanted.push({ scene, need });
+      }
+    }
   }
   if (!wanted.length) return [];
 
@@ -237,21 +247,27 @@ async function runProduction({ jobId }) {
 
   try {
     // ---- Audio starts immediately, in parallel with the visual chain.
-    // VO is the approved script's exact lines, in order — never re-written.
+    // VO is synthesized PER SCENE from the approved script's exact lines and
+    // later mixed at each scene's offset — this is what makes captions and
+    // timing-true narration possible. vo_fit tightens any line that overruns
+    // its scene by >10% (one LLM rewrite, then re-synth).
     const audioDir = path.join(jobDir, "audio");
     fs.mkdirSync(audioDir, { recursive: true });
-    const narration = script.scenes.map((s) => s.voiceover).filter(Boolean).join(" ");
     const voice = pickVoice(job, script);
+    const voInstructions = `${script.voice.style}. Pace: ${script.voice.pace}.`;
 
-    const ttsTask = narration
-      ? ttsSynthesize({
-          script: narration,
-          voice,
-          instructions: `${script.voice.style}. Pace: ${script.voice.pace}.`,
-          outputPath: path.join(audioDir, "tts.mp3"),
-          tracker,
-        }).catch((e) => { console.warn(`[project] tts failed: ${e.message}`); return null; })
-      : Promise.resolve(null);
+    const voTask = Promise.all(script.scenes.map((s) =>
+      (s.voiceover && s.voiceover.trim())
+        ? synthesizeFitted({
+            text: s.voiceover, targetSec: s.duration, voice,
+            instructions: voInstructions,
+            outputPath: path.join(audioDir, `vo-${s.id}.mp3`),
+            tracker,
+          })
+            .then((r) => r ? { sceneId: s.id, startSec: s.start, durationSec: r.durationSec, text: r.text, path: r.path } : null)
+            .catch((e) => { console.warn(`[project] vo for ${s.id} failed: ${e.message}`); return null; })
+        : Promise.resolve(null)
+    )).then((arr) => arr.filter(Boolean));
 
     const musicTask = script.music?.query
       ? fetchMusic({ query: script.music.query, outputPath: path.join(audioDir, "music.mp3"), tracker })
@@ -319,6 +335,7 @@ async function runProduction({ jobId }) {
             prompt: brief?.improvedPrompt || job.prompt, duration,
             orientation: job.orientation, width: dims.width, height: dims.height, fps: dims.fps,
             storyboard: sbRes.storyboard,
+            packTokens: framePack ? require("./frame_registry").getPackTokens(framePack) : null,
           });
           fs.writeFileSync(path.join(jobDir, "index.html"), fb.indexHtml, "utf8");
           fs.writeFileSync(path.join(jobDir, "meta.json"), fb.metaJson, "utf8");
@@ -328,15 +345,34 @@ async function runProduction({ jobId }) {
       }
     }
 
-    // ---- Mix audio ----
+    // ---- Mix audio: per-scene VO clips at their offsets + ducked music ----
     {
       const t0 = ms();
       db.setProgress(jobId, "audio");
-      const [ttsPath, musicPath] = await Promise.all([ttsTask, musicTask]);
+      const [voClips, musicPath] = await Promise.all([voTask, musicTask]);
+
+      // Captions: cue objects + .srt exported next to the MP4.
+      const cues = buildCues(voClips);
+      if (cues.length) {
+        try {
+          const srtPath = path.join(config.paths.videosDir, `${jobId}.srt`);
+          writeSrt(cues, srtPath);
+          db.setCaptions(jobId, { cues, srtUrl: `/videos/${jobId}.srt` });
+        } catch (e) {
+          console.warn(`[project] srt write failed: ${e.message}`);
+        }
+      }
+
       await mixAudioIntoVideo({
         visualPath: visualResult.videoPath,
         durationSec: duration,
-        audio: { ttsPath, musicPath, sfx: [], musicVolume: config.audio?.defaultMusicVolume ?? 0.15 },
+        audio: {
+          ttsPath: null,
+          musicPath,
+          // Each scene's VO rides the mixer's offset mechanism (adelay).
+          sfx: voClips.map((c) => ({ path: c.path, startSec: c.startSec, volume: 1.0 })),
+          musicVolume: config.audio?.defaultMusicVolume ?? 0.15,
+        },
       }).catch((e) => console.warn(`[project] mix failed: ${e.message}`));
       markStage("audio", t0);
     }

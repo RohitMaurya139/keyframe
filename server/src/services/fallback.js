@@ -61,8 +61,49 @@ function deriveScenes({ prompt, duration, storyboard }) {
   return scenes;
 }
 
-function buildFallback({ prompt, duration, orientation, width, height, fps = 30, storyboard }) {
+// Derive a fallback theme from frame-pack tokens (frame_registry.getPackTokens
+// shape) so even the emergency composition looks art-directed: lightest token
+// becomes the ground, darkest the ink, the rest accents. Null -> the original
+// dark-studio default.
+function themeFromTokens(packTokens) {
+  const colors = packTokens && packTokens.colors ? Object.values(packTokens.colors) : [];
+  if (colors.length < 2) return null;
+  const lum = (hex) => {
+    const n = parseInt(hex.slice(1), 16);
+    return 0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255);
+  };
+  const sorted = [...colors].sort((a, b) => lum(b) - lum(a));
+  const ground = sorted[0];
+  const ink = sorted[sorted.length - 1];
+  const accents = sorted.slice(1, -1);
+  const rgba = (hex, a) => {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+  };
+  return {
+    bg1: ground, bg2: ground, bg3: accents[0] || ground,
+    ink, sub: ink, acc1: accents[0] || ink, acc2: accents[1] || accents[0] || ink,
+    particle: ink,
+    aurora1: rgba(accents[0] || ink, 0.30),
+    aurora2: rgba(accents[1] || accents[0] || ink, 0.22),
+    aurora3: rgba(accents[2] || accents[0] || ink, 0.16),
+    fonts: (packTokens.fonts || []).map((f) => `"${f}"`).join(", "),
+    flatText: true, // pack systems get solid ink text, not gradient-clip text
+  };
+}
+
+const DEFAULT_THEME = {
+  bg1: "#0a0f1e", bg2: "#1a2452", bg3: "#3b1d6a",
+  ink: "#f5f7fa", sub: "#d9e1f2", acc1: "#9ad8ff", acc2: "#ffb4e1",
+  particle: "white",
+  aurora1: "rgba(124,196,255,0.35)", aurora2: "rgba(255,125,180,0.28)", aurora3: "rgba(255,200,120,0.18)",
+  fonts: "",
+  flatText: false,
+};
+
+function buildFallback({ prompt, duration, orientation, width, height, fps = 30, storyboard, packTokens }) {
   const scenes = deriveScenes({ prompt, duration, storyboard });
+  const theme = themeFromTokens(packTokens) || DEFAULT_THEME;
 
   const isVertical = orientation === "vertical";
   const headlinePx = isVertical ? 108 : 136;
@@ -82,7 +123,7 @@ function buildFallback({ prompt, duration, orientation, width, height, fps = 30,
     const r  = 2 + Math.round(Math.random() * 5);
     const o  = (0.15 + Math.random() * 0.35).toFixed(2);
     particleEls.push(
-      `<circle class="p p${i}" cx="${cx}%" cy="${cy}%" r="${r}" fill="white" opacity="${o}" />`
+      `<circle class="p p${i}" cx="${cx}%" cy="${cy}%" r="${r}" fill="${theme.particle}" opacity="${o}" />`
     );
   }
   const particlesSvg = `<svg class="particles" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid slice">${particleEls.join("")}</svg>`;
@@ -133,13 +174,13 @@ function buildFallback({ prompt, duration, orientation, width, height, fps = 30,
 <meta charset="utf-8">
 <title>Fallback composition</title>
 <style>
-  html, body { margin: 0; padding: 0; background: #0a0f1e; }
+  html, body { margin: 0; padding: 0; background: ${theme.bg1}; }
   #root {
     position: relative;
     width: ${width}px; height: ${height}px;
     overflow: hidden;
-    font-family: Inter, Roboto, system-ui, -apple-system, "Segoe UI", sans-serif;
-    color: #f5f7fa;
+    font-family: ${theme.fonts ? theme.fonts + ", " : ""}Inter, Roboto, system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: ${theme.ink};
     isolation: isolate;
   }
 
@@ -149,16 +190,16 @@ function buildFallback({ prompt, duration, orientation, width, height, fps = 30,
     pointer-events: none;
   }
   .bg-gradient {
-    background: linear-gradient(135deg, #0b0f1e 0%, #1a2452 45%, #3b1d6a 100%);
+    background: linear-gradient(135deg, ${theme.bg1} 0%, ${theme.bg2} 45%, ${theme.bg3} 100%);
     z-index: 0;
   }
   .bg-aurora {
     background:
-      radial-gradient(ellipse 60% 40% at 20% 30%, rgba(124,196,255,0.35), transparent 65%),
-      radial-gradient(ellipse 50% 35% at 80% 75%, rgba(255,125,180,0.28), transparent 65%),
-      radial-gradient(ellipse 45% 35% at 55% 50%, rgba(255,200,120,0.18), transparent 70%);
+      radial-gradient(ellipse 60% 40% at 20% 30%, ${theme.aurora1}, transparent 65%),
+      radial-gradient(ellipse 50% 35% at 80% 75%, ${theme.aurora2}, transparent 65%),
+      radial-gradient(ellipse 45% 35% at 55% 50%, ${theme.aurora3}, transparent 70%);
     filter: blur(40px);
-    mix-blend-mode: screen;
+    ${theme.flatText ? "" : "mix-blend-mode: screen;"}
     z-index: 1;
   }
 
@@ -181,23 +222,27 @@ function buildFallback({ prompt, duration, orientation, width, height, fps = 30,
     text-shadow: 0 4px 24px rgba(0,0,0,0.5);
   }
   .scene.title .h {
-    background: linear-gradient(120deg, #ffffff 0%, #bde0ff 60%, #ffd1e6 100%);
+    ${theme.flatText
+      ? `color: ${theme.ink};`
+      : `background: linear-gradient(120deg, #ffffff 0%, #bde0ff 60%, #ffd1e6 100%);
     -webkit-background-clip: text; background-clip: text;
-    -webkit-text-fill-color: transparent; color: transparent;
+    -webkit-text-fill-color: transparent; color: transparent;`}
   }
   .scene .t {
     margin-top: 28px;
     font-size: ${subPx}px; font-weight: 500;
     line-height: 1.35; max-width: 78%;
-    color: #d9e1f2;
+    color: ${theme.sub};
   }
   .scene.cta .h {
     font-size: ${ctaPx}px;
-    background: linear-gradient(120deg, #9ad8ff, #ffffff 40%, #ffb4e1);
+    ${theme.flatText
+      ? `color: ${theme.ink};`
+      : `background: linear-gradient(120deg, #9ad8ff, #ffffff 40%, #ffb4e1);
     -webkit-background-clip: text; background-clip: text;
-    -webkit-text-fill-color: transparent; color: transparent;
+    -webkit-text-fill-color: transparent; color: transparent;`}
   }
-  .scene.cta .t { color: #e8c9ff; }
+  .scene.cta .t { color: ${theme.flatText ? theme.sub : "#e8c9ff"}; }
 
   /* Subtle moving blob behind text for depth */
   .blob {
@@ -210,8 +255,8 @@ function buildFallback({ prompt, duration, orientation, width, height, fps = 30,
     z-index: 1;
     pointer-events: none;
   }
-  .blob.b1 { top: -10%; left: -10%; background: radial-gradient(circle, rgba(124,196,255,0.45), transparent 65%); }
-  .blob.b2 { bottom: -15%; right: -10%; background: radial-gradient(circle, rgba(255,125,180,0.40), transparent 65%); }
+  .blob.b1 { top: -10%; left: -10%; background: radial-gradient(circle, ${theme.aurora1}, transparent 65%); }
+  .blob.b2 { bottom: -15%; right: -10%; background: radial-gradient(circle, ${theme.aurora2}, transparent 65%); }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
 </head>

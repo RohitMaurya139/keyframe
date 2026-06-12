@@ -24,7 +24,16 @@ const DEFAULT_ORDER = ["pixabay", "openverse", "pexels", "pixabay_scrape"];
 
 function providersFor(type) {
   const order = config.assetProviders?.order || DEFAULT_ORDER;
-  return order.map((n) => PROVIDERS[n]).filter((p) => p && p.types.includes(type));
+  return order
+    .map((n) => PROVIDERS[n])
+    .filter((p) => p && p.types.includes(type) && (p.available ? p.available() : true));
+}
+
+// Can ANY configured provider serve this asset type right now? (Callers use
+// this to downgrade, e.g. a video need to a still image when no video
+// provider has a key.)
+function hasProviderFor(type) {
+  return providersFor(type).length > 0;
 }
 
 // Acquire one asset. Returns { path, query, source, license, sourceUrl,
@@ -85,4 +94,4 @@ async function acquire({ query, fallbackQueries = [], type, orientation, outputP
   return null;
 }
 
-module.exports = { acquire, localDb };
+module.exports = { acquire, hasProviderFor, localDb };
