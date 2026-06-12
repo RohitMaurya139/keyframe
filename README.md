@@ -3,7 +3,12 @@
 Prompt, reference video, or website URL → editable production script → art-directed,
 voiced, captioned MP4 rendered via HyperFrames.
 
-See [PLAN.md](PLAN.md) for the full build plan.
+See [PLAN.md](PLAN.md) for the full build plan. All 8 phases implemented:
+multi-modal ingest (local whisper STT + headless-Chrome website understanding),
+script checkpoint with pause/approve, three frame-pack design systems
+(blockframe · biennale-yellow · midnight-glass), DB-first asset layer with
+4 providers, per-scene VO with ad-lib defense, baked captions + .srt, and the
+six-screen web app.
 
 ## Monorepo layout
 
@@ -17,22 +22,29 @@ See [PLAN.md](PLAN.md) for the full build plan.
 | `pixabay-no-node-modules/` | Reference: Pixabay scraper service (Cloudflare-aware). |
 | `keyframe-studio/` | Separate lightweight prototype (URL → animated HTML page, port 8090). Not part of the pipeline. |
 
-## Run the server
+## Run it
 
 ```powershell
-cd server
-npm ci
-node server.js   # http://localhost:8080 — needs ffmpeg on PATH, LLM key in config.json
+cd web && npm ci && npm run build   # builds the app into server/public/dist
+cd ..\server && npm ci
+node server.js                       # http://localhost:8080 — needs ffmpeg on PATH, OpenRouter key in config.json
 ```
 
-Smoke test:
+Open http://localhost:8080 — paste a URL or prompt, edit the script, get a film.
+
+API smoke test:
 
 ```powershell
-curl -X POST http://localhost:8080/api/generate -H "Content-Type: application/json" `
-  -d '{"prompt":"Explain photosynthesis in a punchy way","duration":10,"quality":"480p","framePack":"blockframe"}'
-curl http://localhost:8080/api/jobs/<jobId>
-curl http://localhost:8080/api/frames
+curl -X POST http://localhost:8080/api/projects -H "Content-Type: application/json" `
+  -d '{"prompt":"A 20s teaser for my app","duration":20,"framePack":"auto","autopilot":true}'
+curl http://localhost:8080/api/projects/<id>          # state incl. brief/script/assets/captions
+curl http://localhost:8080/api/projects/<id>/events   # SSE progress stream
+curl http://localhost:8080/api/frames                 # design systems
 ```
+
+Optional keys in `server/config.json`: `assetProviders.pixabay.apiKey` /
+`assetProviders.pexels.apiKey` unlock stock *video* assets (without them,
+video needs auto-downgrade to stills from keyless providers).
 
 ## Windows dev notes
 

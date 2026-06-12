@@ -194,6 +194,40 @@ function buildRouter({ enqueueIntake, enqueueProduction }) {
     res.json(job);
   });
 
+  // SSE: push the project state whenever status/progress changes, so the
+  // frontend doesn't have to poll. Closes itself on terminal states.
+  router.get("/projects/:id/events", (req, res) => {
+    if (!/^[0-9a-z]{6,20}$/.test(req.params.id)) return res.status(400).json({ error: "bad id" });
+    if (!db.get(req.params.id)) return res.status(404).json({ error: "not found" });
+
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+
+    let lastKey = "";
+    const send = () => {
+      const p = db.get(req.params.id);
+      if (!p) return true;
+      const key = `${p.status}|${p.progress}|${(p.assets || []).length}|${p.script ? 1 : 0}`;
+      if (key !== lastKey) {
+        lastKey = key;
+        res.write(`data: ${JSON.stringify(p)}\n\n`);
+      }
+      return ["done", "failed"].includes(p.status);
+    };
+
+    if (send()) { res.end(); return; }
+    const timer = setInterval(() => {
+      try {
+        if (send()) { clearInterval(timer); res.end(); }
+      } catch { clearInterval(timer); }
+    }, 1000);
+    req.on("close", () => clearInterval(timer));
+  });
+
   router.post("/projects/:id/approve", (req, res) => {
     if (!/^[0-9a-z]{6,20}$/.test(req.params.id)) return res.status(400).json({ error: "bad id" });
     const raw = db.getRaw(req.params.id);

@@ -107,6 +107,14 @@ function render({ jobId, jobDir, durationSec, quality = config.server.renderQual
         fs.copyFileSync(srcPath, destPath);
         fs.unlinkSync(srcPath);
       }
+
+      // Gallery thumbnail (best effort, non-blocking).
+      try {
+        const thumbPath = path.join(config.paths.videosDir, `${jobId}.jpg`);
+        spawn("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-ss", "1", "-i", destPath, "-vframes", "1", "-vf", "scale=640:-2", "-q:v", "4", thumbPath])
+          .on("error", () => { /* thumbnail is optional */ });
+      } catch { /* noop */ }
+
       resolve({ videoPath: destPath, videoUrl: `/videos/${jobId}.mp4` });
     });
   });
