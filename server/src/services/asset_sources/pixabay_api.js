@@ -1,0 +1,71 @@
+// Pixabay official API provider (images + videos). Key-gated:
+// config.assetProviders.pixabay.apiKey (falls back to legacy
+// config.audio.pixabayKey). Rate limit: 100 req / 60s.
+
+const config = require("../../config");
+const { UA } = require("./util");
+
+function apiKey() {
+  const k = config.assetProviders?.pixabay?.apiKey || config.audio?.pixabayKey || "";
+  return /YOUR_/.test(k) ? "" : k; // ignore the template placeholder
+}
+
+function orientationParam(o) {
+  if (o === "vertical") return "vertical";
+  if (o === "horizontal") return "horizontal";
+  return "all";
+}
+
+async function apiJson(endpoint, params) {
+  const url = new URL(endpoint);
+  url.searchParams.set("key", apiKey());
+  for (const [k, v] of Object.entries(params)) {
+    if (v != null) url.searchParams.set(k, String(v));
+  }
+  const resp = await fetch(url.toString(), {
+    headers: { "User-Agent": UA },
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!resp.ok) throw new Error(`pixabay HTTP ${resp.status}`);
+  return resp.json();
+}
+
+async function search({ query, type, orientation, limit = 5 }) {
+  if (!apiKey()) return [];
+
+  if (type === "image") {
+    const data = await apiJson("https://pixabay.com/api/", {
+      q: query, image_type: "photo",
+      orientation: orientationParam(orientation),
+      per_page: limit, safesearch: "true",
+    });
+    return (data.hits || []).map((h) => ({
+      url: h.largeImageURL || h.webformatURL,
+      width: h.imageWidth, height: h.imageHeight,
+      license: "Pixabay Content License",
+      sourceUrl: h.pageURL,
+    })).filter((c) => c.url);
+  }
+
+  if (type === "video") {
+    const data = await apiJson("https://pixabay.com/api/videos/", {
+      q: query,
+      orientation: orientationParam(orientation),
+      per_page: limit, safesearch: "true",
+    });
+    return (data.hits || []).map((h) => {
+      const v = h.videos || {};
+      const pick = v.medium || v.small || v.large || v.tiny;
+      return pick && pick.url ? {
+        url: pick.url,
+        width: pick.width, height: pick.height,
+        license: "Pixabay Content License",
+        sourceUrl: h.pageURL,
+      } : null;
+    }).filter(Boolean);
+  }
+
+  return [];
+}
+
+module.exports = { name: "pixabay", types: ["image", "video"], search };

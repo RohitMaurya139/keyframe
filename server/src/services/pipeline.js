@@ -26,11 +26,21 @@ const { synthesize: ttsSynthesize } = require("./tts");
 const { fetchMusic, fetchSfx } = require("./audio_sources");
 const { mix: audioMix } = require("./audio_mix");
 const { planAssets } = require("./asset_planner");
-const { fetchImage, fetchVideo } = require("./pixabay_visual");
+const { acquire } = require("./asset_sources");
 const catalog = require("./catalog");
 
 function jobDirFor(jobId) { return path.join(config.paths.jobsDir, jobId); }
 function ms() { return Date.now(); }
+
+// Mechanical fallback queries so a too-specific search degrades to a broader
+// one instead of failing: drop the last word, then keep only the first two.
+function fallbackQueriesFor(query) {
+  const words = String(query).trim().split(/\s+/);
+  const out = [];
+  if (words.length >= 3) out.push(words.slice(0, -1).join(" "));
+  if (words.length >= 2) out.push(words.slice(0, 2).join(" "));
+  return [...new Set(out)].filter((q) => q !== query);
+}
 
 // Wrap a promise factory with a hard wall-clock timeout AND signal-based
 // cancellation so the underlying work can actually stop (not just be
@@ -75,11 +85,15 @@ async function planAndFetchAssets({ jobDir, storyboard, flags, orientation, trac
       const relPath = `assets/images/${i}.jpg`;
       const absPath = path.join(jobDir, relPath);
       tasks.push(
-        fetchImage({ query: a.query, orientation, outputPath: absPath, tracker })
+        acquire({
+          query: a.query, fallbackQueries: fallbackQueriesFor(a.query),
+          type: "image", orientation, outputPath: absPath, tracker,
+        })
           .then((got) => got ? {
             path: relPath, type: "image",
             sceneId: a.sceneId, startSec: a.startSec,
             durationSec: a.durationSec, style: a.style, alt: a.alt,
+            license: got.license, sourceUrl: got.sourceUrl, source: got.source,
           } : null)
           .catch(() => null)
       );
@@ -91,11 +105,15 @@ async function planAndFetchAssets({ jobDir, storyboard, flags, orientation, trac
       const relPath = `assets/videos/${i}.mp4`;
       const absPath = path.join(jobDir, relPath);
       tasks.push(
-        fetchVideo({ query: a.query, orientation, outputPath: absPath, tracker })
+        acquire({
+          query: a.query, fallbackQueries: fallbackQueriesFor(a.query),
+          type: "video", orientation, outputPath: absPath, tracker,
+        })
           .then((got) => got ? {
             path: relPath, type: "video",
             sceneId: a.sceneId, startSec: a.startSec,
             durationSec: a.durationSec, style: a.style,
+            license: got.license, sourceUrl: got.sourceUrl, source: got.source,
           } : null)
           .catch(() => null)
       );
@@ -435,4 +453,4 @@ async function runJob({
   }
 }
 
-module.exports = { runJob, withBudget, attemptLlmComposition, mixAudioIntoVideo };
+module.exports = { runJob, withBudget, attemptLlmComposition, mixAudioIntoVideo, fallbackQueriesFor };

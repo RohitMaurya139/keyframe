@@ -90,6 +90,7 @@ function shape(j) {
     brief: j.brief || null,
     script: j.script || null,
     scriptWarnings: j.script_warnings || null,
+    assets: j.assets || null,
   };
 }
 
@@ -151,6 +152,13 @@ module.exports = {
     j.script = script;
     j.status = "queued";
     j.progress = "approved";
+    scheduleWrite();
+  },
+
+  // Asset manifest (with license/source for attribution in the UI).
+  setAssets(id, assets) {
+    const j = jobs.get(id); if (!j) return;
+    j.assets = assets || [];
     scheduleWrite();
   },
 

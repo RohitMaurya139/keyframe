@@ -26,7 +26,8 @@ const { synthesize: ttsSynthesize } = require("./tts");
 const { fetchMusic } = require("./audio_sources");
 const { VALID_VOICES } = require("./audio_planner");
 const { render } = require("./renderer");
-const { withBudget, attemptLlmComposition, mixAudioIntoVideo } = require("./pipeline");
+const { withBudget, attemptLlmComposition, mixAudioIntoVideo, fallbackQueriesFor } = require("./pipeline");
+const { acquire } = require("./asset_sources");
 
 function jobDirFor(jobId) { return path.join(config.paths.jobsDir, jobId); }
 function ms() { return Date.now(); }
@@ -162,6 +163,53 @@ function pickVoice(job, script) {
   return "nova";
 }
 
+// Acquire the approved script's assetNeeds (our DB first, then providers).
+// Caps: 4 assets total, at most 1 video — keeps render time and composer
+// prompt size sane. Returns the availableAssets manifest the composer sees.
+async function acquireScriptAssets({ script, jobDir, orientation, tracker }) {
+  const wanted = [];
+  for (const scene of script.scenes) {
+    for (const need of scene.assetNeeds || []) wanted.push({ scene, need });
+  }
+  if (!wanted.length) return [];
+
+  const videos = wanted.filter((w) => w.need.type === "video").slice(0, 1);
+  const images = wanted.filter((w) => w.need.type !== "video").slice(0, 4 - videos.length);
+  const picks = [...videos, ...images];
+
+  fs.mkdirSync(path.join(jobDir, "assets", "images"), { recursive: true });
+  fs.mkdirSync(path.join(jobDir, "assets", "videos"), { recursive: true });
+
+  let iImg = 0, iVid = 0;
+  const tasks = picks.map(({ scene, need }) => {
+    const isVideo = need.type === "video";
+    const relPath = isVideo ? `assets/videos/${iVid++}.mp4` : `assets/images/${iImg++}.jpg`;
+    const query = need.type === "icon" ? `${need.query} icon flat` : need.query;
+    return acquire({
+      query,
+      fallbackQueries: fallbackQueriesFor(query),
+      type: isVideo ? "video" : "image",
+      orientation,
+      outputPath: path.join(jobDir, relPath),
+      tracker,
+    })
+      .then((got) => got ? {
+        path: relPath,
+        type: isVideo ? "video" : "image",
+        sceneId: scene.id, startSec: scene.start, durationSec: scene.duration,
+        style: need.role === "inset" ? "inset" : "background",
+        alt: need.query,
+        license: got.license, sourceUrl: got.sourceUrl, source: got.source,
+        fromCache: got.fromCache === true,
+      } : null)
+      .catch(() => null);
+  });
+
+  const got = (await Promise.all(tasks)).filter(Boolean);
+  console.log(`[project] assets acquired: ${got.length}/${picks.length} (${got.filter((a) => a.fromCache).length} from cache)`);
+  return got;
+}
+
 async function runProduction({ jobId }) {
   const job = db.getRaw(jobId);
   if (!job || !job.script) {
@@ -210,6 +258,10 @@ async function runProduction({ jobId }) {
           .catch((e) => { console.warn(`[project] music failed: ${e.message}`); return null; })
       : Promise.resolve(null);
 
+    // ---- Assets (DB-first) start now, in parallel with the storyboard call.
+    const assetsTask = acquireScriptAssets({ script, jobDir, orientation: job.orientation, tracker })
+      .catch((e) => { console.warn(`[project] asset stage failed: ${e.message}`); return []; });
+
     // ---- Storyboard from the approved script ----
     {
       const t0 = ms();
@@ -219,7 +271,12 @@ async function runProduction({ jobId }) {
       tracker.addLlm({ inputTokens: sbRes.tokensIn, outputTokens: sbRes.tokensOut });
       markStage("storyboard", t0);
 
-      // ---- Compose + render (frame-pack styled), with the v1 budget wrapper ----
+      db.setProgress(jobId, "assets");
+      const assets = await assetsTask;
+      db.setAssets(jobId, assets);
+
+      // ---- Compose + render (frame-pack styled), with the v1 budget wrapper.
+      // Tier 1: with assets. Tier 2: asset-less. Tier 3: deterministic fallback.
       const budget = (Number(config.server.stageBudgetSec) || 240) * 1000;
       const t1 = ms();
       db.setProgress(jobId, "composing");
@@ -227,7 +284,7 @@ async function runProduction({ jobId }) {
         visualResult = await withBudget(
           (signal) => attemptLlmComposition({
             storyboard: sbRes.storyboard, dims, jobDir,
-            assets: [], tracker, jobId, durationSec: duration,
+            assets, tracker, jobId, durationSec: duration,
             label: "project-main", abortSignal: signal, framePack,
           }),
           budget, "project composition"
@@ -235,18 +292,39 @@ async function runProduction({ jobId }) {
         markStage("compose_render", t1);
       } catch (e1) {
         markStage("compose_render", t1);
-        console.warn(`[project] composition failed (${e1.message.slice(0, 200)}); using fallback`);
-        finalAttempt = "fallback";
-        usedFallback = true;
-        const fb = buildFallback({
-          prompt: brief?.improvedPrompt || job.prompt, duration,
-          orientation: job.orientation, width: dims.width, height: dims.height, fps: dims.fps,
-          storyboard: sbRes.storyboard,
-        });
-        fs.writeFileSync(path.join(jobDir, "index.html"), fb.indexHtml, "utf8");
-        fs.writeFileSync(path.join(jobDir, "meta.json"), fb.metaJson, "utf8");
-        tracker.addExternal("hyperframes_render");
-        visualResult = await render({ jobId, jobDir, durationSec: duration });
+        console.warn(`[project] composition failed (${e1.message.slice(0, 200)})`);
+        if (assets.length) {
+          finalAttempt = "no-assets";
+          const t2 = ms();
+          try {
+            visualResult = await withBudget(
+              (signal) => attemptLlmComposition({
+                storyboard: sbRes.storyboard, dims, jobDir,
+                assets: [], tracker, jobId, durationSec: duration,
+                label: "project-no-assets", abortSignal: signal, framePack,
+              }),
+              budget, "project no-assets retry"
+            );
+            markStage("retry_no_assets", t2);
+          } catch (e2) {
+            markStage("retry_no_assets", t2);
+            console.warn(`[project] asset-less retry failed (${e2.message.slice(0, 200)})`);
+          }
+        }
+        if (!visualResult) {
+          console.warn(`[project] using deterministic fallback`);
+          finalAttempt = "fallback";
+          usedFallback = true;
+          const fb = buildFallback({
+            prompt: brief?.improvedPrompt || job.prompt, duration,
+            orientation: job.orientation, width: dims.width, height: dims.height, fps: dims.fps,
+            storyboard: sbRes.storyboard,
+          });
+          fs.writeFileSync(path.join(jobDir, "index.html"), fb.indexHtml, "utf8");
+          fs.writeFileSync(path.join(jobDir, "meta.json"), fb.metaJson, "utf8");
+          tracker.addExternal("hyperframes_render");
+          visualResult = await render({ jobId, jobDir, durationSec: duration });
+        }
       }
     }
 
