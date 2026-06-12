@@ -418,6 +418,13 @@ async function runProduction({ jobId }) {
           console.warn(`[project] using deterministic fallback`);
           finalAttempt = "fallback";
           usedFallback = true;
+          // Preserve the LLM composition for debugging/salvage — the
+          // fallback is about to overwrite index.html.
+          try {
+            if (fs.existsSync(path.join(jobDir, "index.html"))) {
+              fs.copyFileSync(path.join(jobDir, "index.html"), path.join(jobDir, "index.llm-attempt.html"));
+            }
+          } catch { /* best effort */ }
           const fb = buildFallback({
             prompt: brief?.improvedPrompt || job.prompt, duration,
             orientation: job.orientation, width: dims.width, height: dims.height, fps: dims.fps,

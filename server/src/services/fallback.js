@@ -66,16 +66,23 @@ function deriveScenes({ prompt, duration, storyboard }) {
 // becomes the ground, darkest the ink, the rest accents. Null -> the original
 // dark-studio default.
 function themeFromTokens(packTokens) {
-  const colors = packTokens && packTokens.colors ? Object.values(packTokens.colors) : [];
-  if (colors.length < 2) return null;
+  const entries = packTokens && packTokens.colors ? Object.entries(packTokens.colors) : [];
+  if (entries.length < 2) return null;
   const lum = (hex) => {
     const n = parseInt(hex.slice(1), 16);
     return 0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255);
   };
-  const sorted = [...colors].sort((a, b) => lum(b) - lum(a));
-  const ground = sorted[0];
-  const ink = sorted[sorted.length - 1];
-  const accents = sorted.slice(1, -1);
+
+  // Ground selection: prefer a token NAMED like a ground (pack authors name
+  // them — offwhite/paper/midnight/abyss); dark packs would otherwise get a
+  // white fallback from their lightest (fill) token. Ink = max contrast.
+  const GROUND_NAMES = /^(ground|paper|paper-deep|offwhite|midnight|abyss|bg|base|night)$/i;
+  const named = entries.find(([k]) => GROUND_NAMES.test(k));
+  const colors = entries.map(([, v]) => v);
+  const byLum = [...colors].sort((a, b) => lum(b) - lum(a));
+  const ground = named ? named[1] : byLum[0];
+  const ink = lum(ground) > 128 ? byLum[byLum.length - 1] : byLum[0];
+  const accents = byLum.filter((c) => c !== ground && c !== ink);
   const rgba = (hex, a) => {
     const n = parseInt(hex.slice(1), 16);
     return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
