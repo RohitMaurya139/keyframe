@@ -301,6 +301,16 @@ async function timelineAgent(s) {
   return { visual };
 }
 
+// Repair lap — re-runs composition → animation audit → timeline as one
+// node so the QA loop never re-enters the first lap's parallel joins.
+async function repairAgent(s) {
+  const comp = await compositionAgent(s);
+  const m1 = { ...s, ...comp };
+  const anim = await animationAgent(m1);
+  const tl = await timelineAgent({ ...m1, ...anim });
+  return { ...comp, ...anim, ...tl };
+}
+
 // QA Agent node — verdict + loop control.
 async function qaAgentNode(s) {
   if (config.qa?.enabled === false || s.usedFallback) {
@@ -338,39 +348,43 @@ async function buildGraph() {
     animationReport: Annotation(), qa: Annotation(), qaAttempts: Annotation(),
   });
 
+  // Node names must not collide with state channel names (LangGraph rule),
+  // hence the _agent suffixes on storyboard/qa.
   const g = new StateGraph(S)
     .addNode("frame_selector", frameSelectorAgent)
-    .addNode("storyboard", storyboardAgent)
+    .addNode("storyboard_agent", storyboardAgent)
     .addNode("scene_planner", scenePlannerAgent)
     .addNode("asset_planner", assetPlannerAgent)
     .addNode("asset_search", assetSearchAgent)
-    .addNode("voice", voiceAgent)
+    .addNode("voice_agent", voiceAgent)
     .addNode("composition", compositionAgent)
     .addNode("animation", animationAgent)
     .addNode("timeline", timelineAgent)
-    .addNode("qa", qaAgentNode);
+    .addNode("qa_agent", qaAgentNode)
+    .addNode("repair", repairAgent);
 
   g.addEdge(START, "frame_selector");
   // Fan-out: three branches run in parallel.
-  g.addEdge("frame_selector", "storyboard");
+  g.addEdge("frame_selector", "storyboard_agent");
   g.addEdge("frame_selector", "asset_planner");
-  g.addEdge("frame_selector", "voice");
-  g.addEdge("storyboard", "scene_planner");
+  g.addEdge("frame_selector", "voice_agent");
+  g.addEdge("storyboard_agent", "scene_planner");
   g.addEdge("asset_planner", "asset_search");
   // Join: composition needs the plan AND the assets.
   g.addEdge(["scene_planner", "asset_search"], "composition");
   g.addEdge("composition", "animation");
   // Join: the timeline mix needs the render AND the voice branch.
-  g.addEdge(["animation", "voice"], "timeline");
-  g.addEdge("timeline", "qa");
-  g.addConditionalEdges("qa", (s) => {
+  g.addEdge(["animation", "voice_agent"], "timeline");
+  g.addEdge("timeline", "qa_agent");
+  g.addConditionalEdges("qa_agent", (s) => {
     const repairsLeft = (s.qaAttempts || 0) <= (Number(config.qa?.maxRepairs) || 1);
     if (!s.qa?.pass && repairsLeft && !s.usedFallback) {
       console.log(`[agents] QA failed — repair lap ${s.qaAttempts}`);
-      return "composition";
+      return "repair";
     }
     return END;
-  }, ["composition", END]);
+  }, ["repair", END]);
+  g.addEdge("repair", "qa_agent");
 
   compiledGraph = g.compile();
   return compiledGraph;
