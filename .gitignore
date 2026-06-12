@@ -1,0 +1,33 @@
+node_modules/
+*/node_modules/
+**/node_modules/
+
+# v1 + server runtime artifacts
+**/jobs/*
+!**/jobs/.gitkeep
+**/public/videos/*.mp4
+jobs.json
+**/jobs.json
+
+# secrets
+.env
+**/.env
+heygen-keyframes-video/config.json
+keyframe-studio/config.json
+server/config.json
+
+# keyframe-studio runtime
+keyframe-studio/jobs/
+keyframe-studio/public/output/
+
+# build outputs
+web/dist/
+**/public/dist/
+
+# uploads / asset cache (large binaries)
+server/uploads/
+server/asset_cache/
+
+# OS noise
+Thumbs.db
+.DS_Store
