@@ -42,6 +42,9 @@ function modelForStage(stage) {
 function isRetryable(err) {
   const status = err?.status || err?.response?.status;
   if (status === 429) return true;
+  // 402 = the key's daily credit limit can't cover this model's max_tokens
+  // ceiling — the much cheaper fallback model usually still fits.
+  if (status === 402) return true;
   if (status >= 500 && status < 600) return true;
   const code = err?.code || err?.cause?.code || err?.name;
   if (code === "ETIMEDOUT" || code === "ECONNRESET" || code === "ENOTFOUND" ||
@@ -159,6 +162,10 @@ async function chat({ system, user, jsonMode = false, temperature, model, stage,
   const orBody = {
     messages,
     temperature: temperature ?? config.llm.temperature,
+    // Explicit output ceiling: OpenRouter pre-charges affordability against
+    // max_tokens (default 65k), so an explicit cap keeps requests viable as
+    // the daily credit limit depletes — and bounds runaway reasoning.
+    max_tokens: Number(config.llm.maxTokens?.[stage]) || Number(config.llm.maxTokens?.default) || 12288,
   };
   if (jsonMode) orBody.response_format = { type: "json_object" };
 

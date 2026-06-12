@@ -63,6 +63,9 @@ async function synthesize({ script, voice, instructions, outputPath, model, trac
     modalities: ["text", "audio"],
     audio: { voice: mapVoice(voice), format: "pcm16" },
     stream: true,
+    // Bounded so OpenRouter's affordability pre-check (against max_tokens)
+    // doesn't 402 short VO clips when the daily budget runs low.
+    max_tokens: 8192,
     messages: [
       { role: "system", content: system },
       { role: "user", content: `<script>\n${script}\n</script>` },
