@@ -51,6 +51,7 @@ Match the user's message exactly.
 12. **Clips sharing a `data-track-index` must NEVER overlap in time** — `[start, start+duration)` ranges on one track must be disjoint, or lint FAILS. A full-duration background clip needs its own track with nothing else on it.
 13. After each scene's exit animation, add a hard kill at the moment the next scene starts: `tl.set("#sceneId", { opacity: 0 }, nextSceneStart)`. Non-linear seeking can otherwise land after a fade and show stale state.
 14. **NEVER bake hidden states as `transform` or `clip-path` in inline styles/CSS** on elements the timeline will move. GSAP COMPOSES `xPercent`/`x`/`rotation` with an existing CSS transform — an element styled `transform: translateX(100%)` then tweened `xPercent: 100 → 0` ends at translateX(100%) + 0% and stays offscreen FOREVER. The only allowed pre-entrance hidden state in CSS is `opacity: 0`. All entrance positions/rotations/clips are defined exclusively inside `tl.fromTo(target, {FROM}, {TO})` from-values.
+15. **NEVER animate or set `display` or `visibility` on a clip element** (any element with `class="clip"`) — the framework OWNS clip visibility via `data-start`/`data-duration` and lint FAILS on it (`gsap_animates_clip_element`). Scene hard kills and fades use `{ opacity: 0 }` exclusively, never `display`/`visibility`/`autoAlpha`. Children inside clips may be animated freely.
 
 ## Visual-richness checklist (every scene)
 
@@ -243,6 +244,7 @@ Mentally walk every scene:
 - No two clips on the same `data-track-index` overlap in time? ✓
 - Every scene exit followed by a hard `tl.set(..., { opacity: 0 }, t)` kill? ✓
 - Zero `transform`/`clip-path` hidden states in CSS or inline styles (only `opacity: 0`; all motion from-states live in `tl.fromTo`)? ✓
+- Zero `display`/`visibility`/`autoAlpha` on any `.clip` element (opacity only)? ✓
 
 If yes to all, emit the sentinel-delimited response. If no to any, fix it and then emit.
 
