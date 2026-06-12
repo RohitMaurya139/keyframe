@@ -108,4 +108,26 @@ function stats() {
   return { count: idx.length, bytes: idx.reduce((s, e) => s + (e.bytes || 0), 0) };
 }
 
-module.exports = { search, materialize, register, stats, CACHE_DIR };
+// Keep the cache under maxBytes: evict least-used (fewest hits), oldest first.
+function prune(maxBytes) {
+  const idx = load();
+  let total = idx.reduce((s, e) => s + (e.bytes || 0), 0);
+  if (total <= maxBytes) return 0;
+  const victims = [...idx].sort((a, b) => (a.hits || 0) - (b.hits || 0) || a.addedAt - b.addedAt);
+  let removed = 0;
+  for (const v of victims) {
+    if (total <= maxBytes) break;
+    try { fs.unlinkSync(v.file); } catch { /* already gone */ }
+    const i = idx.indexOf(v);
+    if (i >= 0) idx.splice(i, 1);
+    total -= v.bytes || 0;
+    removed++;
+  }
+  if (removed) {
+    persist();
+    console.log(`[asset_db] pruned ${removed} asset(s); cache now ${(total / 1048576).toFixed(0)} MB`);
+  }
+  return removed;
+}
+
+module.exports = { search, materialize, register, stats, prune, CACHE_DIR };

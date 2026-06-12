@@ -12,6 +12,7 @@ const TABS = [
 const PACK_STYLES = {
   blockframe: { bg: "#FFFDF5", chips: ["#FE90E8", "#C0F7FE", "#99E885", "#F7CB46"], label: "#000000", vibe: "neo-brutalist candy" },
   "biennale-yellow": { bg: "#E9E5DB", chips: ["#F1EE2E", "#1B2566", "#E26B4A"], label: "#1B2566", vibe: "parchment editorial" },
+  "midnight-glass": { bg: "#0A0F2A", chips: ["#00F0FF", "#7A5CFF", "#C7D6F0"], label: "#EAF2FF", vibe: "dark glass keynote" },
 };
 
 export default function CreateScreen({ onCreated }) {

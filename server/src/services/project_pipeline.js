@@ -91,13 +91,15 @@ async function runIntake({ jobId, onApproved, skipBrief = false }) {
       }
     }
 
+    const intakeBudgetMs = (Number(config.server.stageBudgetSec) || 480) * 1000;
+
     let brief;
     if (skipBrief && job.brief) {
       brief = job.brief; // regenerate-script keeps the existing brief
     } else {
       const t0 = ms();
       db.setProgress(jobId, "brief");
-      const briefRes = await generateBrief({ intent });
+      const briefRes = await withBudget((signal) => generateBrief({ intent, signal }), intakeBudgetMs, "brief stage");
       tracker.addLlm({ inputTokens: briefRes.tokensIn, outputTokens: briefRes.tokensOut });
       timings.briefMs = ms() - t0;
       brief = briefRes.brief;
@@ -108,7 +110,7 @@ async function runIntake({ jobId, onApproved, skipBrief = false }) {
 
     const tScript = ms();
     db.setProgress(jobId, "script");
-    const scriptRes = await generateScript({ brief });
+    const scriptRes = await withBudget((signal) => generateScript({ brief, signal }), intakeBudgetMs, "script stage");
     tracker.addLlm({ inputTokens: scriptRes.tokensIn, outputTokens: scriptRes.tokensOut });
     timings.scriptMs = ms() - tScript;
 

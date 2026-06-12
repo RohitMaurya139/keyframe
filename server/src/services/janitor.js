@@ -45,6 +45,25 @@ function sweepJobDirs(now) {
   return removed;
 }
 
+// Reference-video uploads are only needed during intake (and for a possible
+// regenerate-from-brief); 24 hours is generous.
+const UPLOAD_TTL_MS = 24 * 60 * 60 * 1000;
+
+function sweepUploads(now) {
+  const entries = safeReaddir(config.paths.uploadsDir);
+  let removed = 0;
+  for (const ent of entries) {
+    if (!ent.isFile()) continue;
+    const full = path.join(config.paths.uploadsDir, ent.name);
+    const st = statOr(full);
+    if (st && now - st.mtimeMs > UPLOAD_TTL_MS) {
+      rmFile(full);
+      removed++;
+    }
+  }
+  return removed;
+}
+
 function sweepVideos(now) {
   const ttl = config.server.videoTtlHours * 60 * 60 * 1000;
   const entries = safeReaddir(config.paths.videosDir);
@@ -53,7 +72,7 @@ function sweepVideos(now) {
   let removedTtl = 0;
 
   for (const ent of entries) {
-    if (!ent.isFile() || !ent.name.endsWith(".mp4")) continue;
+    if (!ent.isFile() || !(ent.name.endsWith(".mp4") || ent.name.endsWith(".srt"))) continue;
     const full = path.join(config.paths.videosDir, ent.name);
     const st = statOr(full);
     if (!st) continue;
@@ -86,8 +105,15 @@ function runOnce() {
   try {
     const jobs = sweepJobDirs(now);
     const vids = sweepVideos(now);
-    if (jobs || vids.removedTtl || vids.removedCap) {
-      console.log(`[janitor] swept jobs=${jobs} videosTtl=${vids.removedTtl} videosCap=${vids.removedCap} bytes=${vids.totalBytes}`);
+    const uploads = sweepUploads(now);
+    let cachePruned = 0;
+    try {
+      const localDb = require("./asset_sources/local_db");
+      const capMb = Number(config.assetProviders?.maxCacheMb) || 1024;
+      cachePruned = localDb.prune(capMb * 1024 * 1024);
+    } catch { /* cache module optional */ }
+    if (jobs || vids.removedTtl || vids.removedCap || uploads || cachePruned) {
+      console.log(`[janitor] swept jobs=${jobs} videosTtl=${vids.removedTtl} videosCap=${vids.removedCap} uploads=${uploads} cachePruned=${cachePruned} bytes=${vids.totalBytes}`);
     }
   } catch (e) {
     console.error(`[janitor] sweep failed: ${e.message}`);

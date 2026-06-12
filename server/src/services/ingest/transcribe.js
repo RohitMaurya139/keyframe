@@ -42,7 +42,7 @@ async function extractAudio(videoPath, outDir) {
 async function sttLocal(wavPath) {
   const script = path.join(config.paths.root, "scripts", "transcribe.py");
   const modelSize = config.stt?.localModel || "small";
-  const python = config.stt?.pythonBin || "python";
+  const python = config.stt?.pythonBin || (process.platform === "win32" ? "python" : "python3");
   // Whisper small on CPU runs ~1x realtime; allow 10 min for long uploads.
   const { stdout } = await run(python, [script, wavPath, modelSize], { timeoutMs: 600_000 });
   const parsed = JSON.parse(stdout.trim().split("\n").pop());

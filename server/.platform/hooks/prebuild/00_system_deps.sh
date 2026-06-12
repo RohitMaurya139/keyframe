@@ -64,4 +64,22 @@ dnf install -y --setopt=install_weak_deps=False \
   liberation-fonts dejavu-sans-fonts google-noto-sans-fonts \
   >/dev/null
 
+# ---------- Chromium binary for website ingest (puppeteer-core needs one) ----------
+# HyperFrames warms its own copy into the webapp user's puppeteer cache at
+# first render; install a system chromium as the deterministic fallback that
+# ingest/website.js findChrome() also checks via PUPPETEER_EXECUTABLE_PATH.
+if ! command -v chromium-browser >/dev/null 2>&1 && [ ! -x /usr/bin/chromium ]; then
+  log "installing chromium"
+  dnf install -y chromium >/dev/null || log "WARN: chromium dnf install failed (ingest falls back to puppeteer cache)"
+fi
+
+# ---------- Python + faster-whisper (local STT for video ingest) ----------
+if ! python3 -c "import faster_whisper" >/dev/null 2>&1; then
+  log "installing python3 + faster-whisper"
+  dnf install -y python3 python3-pip >/dev/null
+  pip3 install --quiet faster-whisper || log "WARN: faster-whisper install failed (set config stt.provider to a hosted endpoint)"
+else
+  log "faster-whisper already installed"
+fi
+
 log "done"
