@@ -206,4 +206,32 @@ async function chat({ system, user, jsonMode = false, temperature, model, stage,
   }
 }
 
-module.exports = { chat, modelForStage };
+// Daily-budget probe (free endpoint, 60s cache). Returns
+// { remaining, limit } in USD, or null when the probe itself fails —
+// callers must treat null as "unknown, proceed".
+let budgetCache = { at: 0, value: null };
+async function checkBudget() {
+  if (Date.now() - budgetCache.at < 60_000) return budgetCache.value;
+  try {
+    const resp = await fetch(`${config.llm.baseUrl.replace(/\/$/, "")}/key`, {
+      headers: { Authorization: `Bearer ${config.llm.apiKey}` },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const j = await resp.json();
+    const d = j.data || {};
+    budgetCache = {
+      at: Date.now(),
+      value: { remaining: d.limit_remaining ?? null, limit: d.limit ?? null },
+    };
+  } catch {
+    budgetCache = { at: Date.now(), value: null };
+  }
+  return budgetCache.value;
+}
+
+const BUDGET_EXHAUSTED_MSG =
+  "Daily LLM budget exhausted — the OpenRouter key's daily limit is used up. " +
+  "It resets automatically every day; to continue today, raise the key's daily limit at openrouter.ai/settings/keys.";
+
+module.exports = { chat, modelForStage, checkBudget, BUDGET_EXHAUSTED_MSG };

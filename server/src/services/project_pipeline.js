@@ -16,6 +16,7 @@ const path = require("node:path");
 const config = require("../config");
 const db = require("../db");
 const { UsageTracker } = require("./usage");
+const { checkBudget, BUDGET_EXHAUSTED_MSG } = require("./openrouter");
 const { generateBrief } = require("./brief");
 const { generateScript, validateScript, normalizeScript } = require("./script");
 const { understandWebsite } = require("./ingest/website");
@@ -38,6 +39,15 @@ function ms() { return Date.now(); }
 async function runIntake({ jobId, onApproved, skipBrief = false }) {
   const job = db.getRaw(jobId);
   if (!job) return;
+
+  // Fail fast and legibly when the daily LLM budget is gone — a silent
+  // fallback video with no voice is worse than an honest error.
+  const budget = await checkBudget();
+  if (budget && budget.remaining !== null && budget.remaining < 0.15) {
+    console.warn(`[project] ${jobId} blocked: $${budget.remaining} of $${budget.limit} daily budget remaining`);
+    db.markFailed(jobId, BUDGET_EXHAUSTED_MSG);
+    return;
+  }
 
   const tracker = new UsageTracker();
   const timings = {};
@@ -264,6 +274,13 @@ async function runProduction({ jobId }) {
   const job = db.getRaw(jobId);
   if (!job || !job.script) {
     console.error(`[project] ${jobId} production aborted: no approved script`);
+    return;
+  }
+
+  const budget = await checkBudget();
+  if (budget && budget.remaining !== null && budget.remaining < 0.15) {
+    console.warn(`[project] ${jobId} production blocked: $${budget.remaining} of $${budget.limit} daily budget remaining`);
+    db.markFailed(jobId, BUDGET_EXHAUSTED_MSG);
     return;
   }
 
