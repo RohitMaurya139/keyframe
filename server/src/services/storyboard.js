@@ -28,13 +28,7 @@ function buildUser({ prompt, duration, orientation }) {
   ].join("\n");
 }
 
-function parseJsonLenient(text) {
-  // MiniMax usually returns clean JSON; strip fences just in case.
-  const trimmed = text.trim()
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/\s*```$/, "");
-  return JSON.parse(trimmed);
-}
+const { extractFirstJsonObject: parseJsonLenient } = require("./json_lenient");
 
 function validate(storyboard, { duration, orientation }) {
   const errs = [];

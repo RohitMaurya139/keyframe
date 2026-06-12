@@ -13,10 +13,7 @@ const SYSTEM = fs.readFileSync(
 
 const STYLES = new Set(["fullscreen", "background", "inset"]);
 
-function parseJsonLenient(text) {
-  const t = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-  return JSON.parse(t);
-}
+const { extractFirstJsonObject: parseJsonLenient } = require("./json_lenient");
 
 function buildUser(storyboard, flags) {
   return [

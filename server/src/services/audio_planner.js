@@ -20,12 +20,7 @@ function randomVoice() {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-function parseJsonLenient(text) {
-  const trimmed = text.trim()
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/\s*```$/, "");
-  return JSON.parse(trimmed);
-}
+const { extractFirstJsonObject: parseJsonLenient } = require("./json_lenient");
 
 function buildUser(storyboard, flags) {
   const lines = [

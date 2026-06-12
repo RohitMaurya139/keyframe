@@ -7,21 +7,20 @@
 //
 // Pricing (per 1M tokens, USD):
 //   The LLM cost uses the PRIMARY provider's rates (KIE Gemini 3.5 Flash), which
-//   serves the vast majority of calls. On the rare fallback to OpenRouter MiniMax
-//   the true rate differs (input ~0.96 / output ~4.00), so cost is approximate
-//   for those calls only.
-//   Gemini 3.5 Flash (KIE, primary):  input 0.45   output 2.70
-//   gpt-4o-mini-tts:                  input 0.60   output 12.00
+//   Primary chat model is OpenRouter google/gemini-3.5-flash (input 1.50 /
+//   output 9.00 per M). Fast-stage and fallback models are cheaper, so cost
+//   is a slight overestimate for those calls.
+//   openai/gpt-audio-mini (TTS):      input 0.60   output 2.40
 // Everything else is free.
 
 const PRICING = {
   llm: {
-    inputPerMillionUsd:  0.45,
-    outputPerMillionUsd: 2.70,
+    inputPerMillionUsd:  1.50,
+    outputPerMillionUsd: 9.00,
   },
   tts: {
     inputPerMillionUsd:  0.60,
-    outputPerMillionUsd: 12.00,
+    outputPerMillionUsd: 2.40,
   },
 };
 

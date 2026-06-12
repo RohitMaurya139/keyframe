@@ -9,6 +9,7 @@ const openrouter = require("./openrouter");
 const { getComposerSkills } = require("./skills");
 const { getCatalogSummary } = require("./catalog");
 const frameRegistry = require("./frame_registry");
+const { extractFirstJsonObject } = require("./json_lenient");
 
 const SYSTEM_BASE = fs.readFileSync(
   path.join(__dirname, "..", "prompts", "system_composer.md"),
@@ -135,8 +136,7 @@ function buildUser(storyboard, { width, height, fps, availableAssets, framePack 
 }
 
 function parseEnvelope(text) {
-  const trimmed = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-  const obj = JSON.parse(trimmed);
+  const obj = extractFirstJsonObject(text);
   if (typeof obj.indexHtml !== "string" || typeof obj.metaJson !== "string") {
     throw new Error("envelope missing indexHtml or metaJson string fields");
   }

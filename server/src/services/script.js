@@ -122,10 +122,7 @@ function validateScript(script, { targetDuration } = {}) {
   return { ok: errors.length === 0, errors, warnings };
 }
 
-function parseLenient(text) {
-  const trimmed = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-  return JSON.parse(trimmed);
-}
+const { extractFirstJsonObject: parseLenient } = require("./json_lenient");
 
 async function generateScript({ brief, signal }) {
   const targetDuration = brief.suggestedDuration;

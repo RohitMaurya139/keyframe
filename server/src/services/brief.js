@@ -36,10 +36,7 @@ const PACK_VIBES = {
   "midnight-glass": "dark glassmorphism: deep navy, frosted cards, one neon accent — premium, technical, nocturnal",
 };
 
-function parseLenient(text) {
-  const trimmed = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-  return JSON.parse(trimmed);
-}
+const { extractFirstJsonObject: parseLenient } = require("./json_lenient");
 
 async function generateBrief({ intent, signal }) {
   const packs = frameRegistry.listPacks();
