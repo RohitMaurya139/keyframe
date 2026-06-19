@@ -18,7 +18,9 @@ const db = require("../db");
 const { UsageTracker } = require("./usage");
 const { generateStoryboard } = require("./storyboard");
 const { compose } = require("./composer");
-const { validate } = require("./validator");
+const { validate, runInspect } = require("./validator");
+const { runtimeCheck } = require("./runtime_check");
+const { normalizeComposition } = require("./normalize");
 const { render } = require("./renderer");
 const { buildFallback } = require("./fallback");
 const { planAudio } = require("./audio_planner");
@@ -90,7 +92,7 @@ async function planAndFetchAssets({ jobDir, storyboard, flags, orientation, trac
           type: "image", orientation, outputPath: absPath, tracker,
         })
           .then((got) => got ? {
-            path: relPath, type: "image",
+            path: path.relative(jobDir, got.path).split(path.sep).join("/"), type: "image",
             sceneId: a.sceneId, startSec: a.startSec,
             durationSec: a.durationSec, style: a.style, alt: a.alt,
             license: got.license, sourceUrl: got.sourceUrl, source: got.source,
@@ -110,7 +112,7 @@ async function planAndFetchAssets({ jobDir, storyboard, flags, orientation, trac
           type: "video", orientation, outputPath: absPath, tracker,
         })
           .then((got) => got ? {
-            path: relPath, type: "video",
+            path: path.relative(jobDir, got.path).split(path.sep).join("/"), type: "video",
             sceneId: a.sceneId, startSec: a.startSec,
             durationSec: a.durationSec, style: a.style,
             license: got.license, sourceUrl: got.sourceUrl, source: got.source,
@@ -127,59 +129,99 @@ async function planAndFetchAssets({ jobDir, storyboard, flags, orientation, trac
 
 // ========== Composition + lint repair ==========
 
-async function composeWithLintRepair({ storyboard, dims, jobDir, availableAssets, tracker, abortSignal, framePack, captionCues }) {
-  console.log(`[pipeline] composeWithLintRepair: calling composer (first pass)`);
-  const first = await compose(storyboard, {
-    width: dims.width, height: dims.height, fps: dims.fps,
-    duration: storyboard.durationSec,
-    maxRetries: config.llm.composerMaxRetries,
-    availableAssets,
-    abortSignal,
-    framePack,
-    captionCues,
-  });
-  tracker.addLlm({ inputTokens: first.tokensIn, outputTokens: first.tokensOut });
+// Normalize + install catalog blocks + lint + runtime-smoke one composer output.
+// Returns { ok, feedback } — feedback is the next-lap repair brief when !ok.
+async function gateComposition({ files, jobDir, tracker, label }) {
+  const norm = normalizeComposition(files.indexHtml);
+  if (norm.changed.length) {
+    files.indexHtml = norm.html;
+    console.log(`[pipeline] normalized ${label}: ${norm.changed.join(", ")}`);
+  }
 
-  // Install any catalog blocks the LLM referenced via data-composition-src.
   try {
-    const r = await catalog.installReferencedBlocks(first.indexHtml, jobDir);
+    const r = await catalog.installReferencedBlocks(files.indexHtml, jobDir);
     if (r.installed.length) tracker.addExternal("catalog_install");
-    if (r.failed.length) {
-      console.warn(`[pipeline] catalog installs failed for: ${r.failed.join(", ")}`);
-    }
+    if (r.failed.length) console.warn(`[pipeline] catalog installs failed for: ${r.failed.join(", ")}`);
   } catch (e) {
     console.warn(`[pipeline] catalog install step threw: ${e.message}`);
   }
 
-  console.log(`[pipeline] composeWithLintRepair: running hyperframes lint`);
   tracker.addExternal("hyperframes_lint");
-  const lint1 = await validate(jobDir, { indexHtml: first.indexHtml, metaJson: first.metaJson });
-  if (lint1.ok) { console.log(`[pipeline] lint passed on first attempt`); return { files: first }; }
+  const lint = await validate(jobDir, { indexHtml: files.indexHtml, metaJson: files.metaJson });
+  if (!lint.ok) {
+    console.warn(`[pipeline] hyperframes lint FAILED (${label}):\n${String(lint.stderr || lint.stdout || "(no output)").slice(-2000)}`);
+    return { ok: false, feedback: `Previous HTML failed hyperframes lint with:\n${lint.stderr || lint.stdout}\nFix ONLY these specific issues and DO NOT introduce new lint violations (especially: keep clips on disjoint tracks, no overlapping clips on one track; use CSS opacity:0 for initial hidden state, never gsap.set() for it). Preserve everything that already passed.` };
+  }
 
-  console.warn(`[pipeline] lint failed; attempting repair. tail: ${(lint1.stderr || lint1.stdout).slice(-600)}`);
-  const repairStoryboard = { ...storyboard,
-    __lintFeedback: `Previous HTML failed hyperframes lint with:\n${lint1.stderr || lint1.stdout}\nFix these issues specifically.`,
+  // Static lint can't catch a script that THROWS at runtime (→ blank video).
+  const rt = await runtimeCheck(jobDir).catch((e) => ({ ok: true, skipped: e.message }));
+  if (!rt.ok) {
+    console.warn(`[pipeline] composition lint-clean but FAILED runtime smoke (${label}): ${rt.error}`);
+    return { ok: false, feedback: `Previous HTML passed structural lint but ${rt.error}. The composition MUST run without throwing AND register window.__timelines["vid"]. A common cause is misusing a GSAP function-based value: the callback signature is function(index, element, targets) — read the element from the 2nd argument; NEVER call this.target() (it is not a function). Fix the script so it executes cleanly end to end.` };
+  }
+
+  // Spatial layout audit (hyperframes inspect) — catches cards/text occluding
+  // each other in SPACE, which lint (time-only) and runtime (does-it-throw) miss.
+  // This is the gate for the "random overlapping cards" symptom. inspectOnly:true
+  // marks a comp that is structurally/ runtime sound but has spatial overlaps —
+  // the caller ships it on the final lap (a real comp beats the bland fallback).
+  tracker.addExternal("hyperframes_inspect");
+  const insp = await runInspect(jobDir).catch(() => ({ ok: true, skipped: true }));
+  if (insp.ok) {
+    console.log(`[pipeline] lint + runtime + spatial inspect passed (${label})${rt.skipped ? ` (smoke skipped)` : ""}${insp.skipped ? ` (inspect skipped)` : ""}`);
+    return { ok: true };
+  }
+  const issueLines = insp.errors.slice(0, 12).map((i) =>
+    `at ${i.time}s ${i.selector}${i.containerSelector ? ` (in ${i.containerSelector})` : ""}: ${i.message}${i.fixHint ? ` — ${i.fixHint}` : ""}`
+  ).join("\n");
+  console.warn(`[pipeline] spatial inspect FAILED (${label}): ${insp.errors.length} occlusion error(s)`);
+  return {
+    ok: false,
+    inspectOnly: true,
+    feedback: `Previous HTML passed lint + runtime but FAILED the spatial layout inspect — content is OVERLAPPING / OCCLUDING in space:\n${issueLines}\nFIX: lay sibling cards/panels/labels out in a flex or grid container with an explicit gap so they NEVER overlap; reserve position:absolute for decoratives only; give each scene's content its own zone. If a layer is intentionally stacked over another, add data-layout-allow-occlusion to it. Keep everything that already passed.`,
   };
-  const second = await compose(repairStoryboard, {
-    width: dims.width, height: dims.height, fps: dims.fps,
-    duration: storyboard.durationSec, maxRetries: 1, availableAssets,
-    abortSignal,
-    framePack,
-    captionCues,
-  });
-  tracker.addLlm({ inputTokens: second.tokensIn, outputTokens: second.tokensOut });
+}
 
-  try {
-    const r = await catalog.installReferencedBlocks(second.indexHtml, jobDir);
-    if (r.installed.length) tracker.addExternal("catalog_install");
-  } catch (e) { /* non-fatal */ }
+async function composeWithLintRepair({ storyboard, dims, jobDir, availableAssets, tracker, abortSignal, framePack, captionCues }) {
+  // First pass + up to N repair laps. Weaker/reasoning composer models often fix
+  // the flagged errors on a repair but introduce a NEW class (e.g. nemotron clears
+  // track overlaps, then trips gsap_set_initial_state) — a single lap can't
+  // converge, so it falls back. Allow a few laps before escalating.
+  const maxRepairs = Math.max(1, Number(config.llm.composerLintRepairs) || 2);
 
-  tracker.addExternal("hyperframes_lint");
-  const lint2 = await validate(jobDir, { indexHtml: second.indexHtml, metaJson: second.metaJson });
-  if (lint2.ok) return { files: second };
+  let feedback = null;
+  let lastFiles = null;
+  let lastInspectOnly = false;
+  for (let lap = 0; lap <= maxRepairs; lap++) {
+    const label = lap === 0 ? "first pass" : `repair ${lap}/${maxRepairs}`;
+    console.log(`[pipeline] composeWithLintRepair: composer (${label})`);
+    const sb = feedback ? { ...storyboard, __lintFeedback: feedback } : storyboard;
+    const files = await compose(sb, {
+      width: dims.width, height: dims.height, fps: dims.fps,
+      duration: storyboard.durationSec,
+      maxRetries: lap === 0 ? config.llm.composerMaxRetries : 1,
+      availableAssets, abortSignal, framePack, captionCues,
+    });
+    tracker.addLlm({ inputTokens: files.tokensIn, outputTokens: files.tokensOut });
+    lastFiles = files;
 
-  const err = new Error(`lint still failed after repair: ${(lint2.stderr || lint2.stdout).slice(-600)}`);
-  throw err;
+    const res = await gateComposition({ files, jobDir, tracker, label });
+    if (res.ok) return { files };
+    feedback = res.feedback;
+    lastInspectOnly = !!res.inspectOnly;
+    if (lap < maxRepairs) console.warn(`[pipeline] attempting repair (lap ${lap + 1}/${maxRepairs})`);
+  }
+
+  // Exhausted repair laps. If the ONLY remaining problem is spatial overlap
+  // (lint + runtime passed), SHIP the real composition — an imperfect-but-rich
+  // render beats the bland deterministic fallback (mirrors graph.js QA policy).
+  if (lastInspectOnly && lastFiles) {
+    console.warn(`[pipeline] shipping composition despite residual spatial-overlap warnings after ${maxRepairs} lap(s) — real comp beats fallback`);
+    return { files: lastFiles };
+  }
+  // A composition that still trips lint/runtime renders wrong or blank — worse
+  // than the deterministic fallback. Let the caller escalate.
+  throw new Error(`composition still failed gate after ${maxRepairs} repair lap(s): ${String(feedback || "").slice(-400)}`);
 }
 
 // ========== One attempt at full LLM comp + render with a given asset set ==========
@@ -249,6 +291,31 @@ async function buildAudio({ jobDir, storyboard, flags, tracker }) {
   return { ttsPath, musicPath, sfx, musicVolume };
 }
 
+// Move the freshly-mixed temp file over the original render. On Windows the
+// just-rendered .mp4 can still be held open briefly (render finalize / AV scan),
+// so a bare renameSync throws EPERM/EBUSY and silently drops all audio. Retry
+// with backoff, then fall back to copy-over-delete (which tolerates an open dest
+// on some handles), so a transient lock never loses the mix.
+async function replaceFile(srcPath, destPath, { attempts = 6, delayMs = 200 } = {}) {
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    try { fs.renameSync(srcPath, destPath); return; }
+    catch (e) {
+      lastErr = e;
+      if (!["EPERM", "EBUSY", "EACCES"].includes(e.code)) throw e;
+      await new Promise((r) => setTimeout(r, delayMs * (i + 1)));
+    }
+  }
+  // Last resort: overwrite contents in place, then remove the temp.
+  try {
+    fs.copyFileSync(srcPath, destPath);
+    try { fs.unlinkSync(srcPath); } catch { /* temp cleanup best-effort */ }
+    return;
+  } catch (e) {
+    throw new Error(`could not replace ${path.basename(destPath)} after mix (${lastErr?.code || lastErr?.message}; copy fallback: ${e.message})`);
+  }
+}
+
 async function mixAudioIntoVideo({ visualPath, durationSec, audio }) {
   if (!audio.ttsPath && !audio.musicPath && audio.sfx.length === 0) return false;
   const mixedPath = path.join(config.paths.videosDir, path.basename(visualPath) + ".tmp.mp4");
@@ -257,7 +324,7 @@ async function mixAudioIntoVideo({ visualPath, durationSec, audio }) {
     ttsPath: audio.ttsPath, musicPath: audio.musicPath,
     musicVolume: audio.musicVolume, sfx: audio.sfx,
   });
-  fs.renameSync(mixedPath, visualPath);
+  await replaceFile(mixedPath, visualPath);
   return true;
 }
 
@@ -400,6 +467,7 @@ async function runJob({
         prompt, duration, orientation, width, height, fps,
         storyboard: sbRes.storyboard,
         packTokens: framePack ? require("./frame_registry").getPackTokens(framePack) : null,
+        assets: allAssets,
       });
       fs.writeFileSync(path.join(jobDir, "index.html"), fb.indexHtml, "utf8");
       fs.writeFileSync(path.join(jobDir, "meta.json"), fb.metaJson, "utf8");

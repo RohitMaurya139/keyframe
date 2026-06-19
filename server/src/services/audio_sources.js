@@ -164,13 +164,23 @@ async function internetArchiveFirstMp3(query) {
 // ---------- Public API ----------
 
 async function fetchMusic({ query, outputPath, tracker }) {
-  // 1) Freesound
+  // 1) Freesound — bias to MUSIC, not foley/field-recordings. Freesound is an
+  // SFX-leaning site, so without tag:music a 2-word query returns drones/noise.
   if (tracker) tracker.addExternal("freesound_search");
-  const fsResults = await freesoundSearch({
+  let fsResults = await freesoundSearch({
     query,
-    filter: "duration:[20 TO 180]",
+    filter: "duration:[20 TO 180] tag:music",
     sort: "rating_desc",
   });
+  // If the music-tag filter is too strict for this query, retry untagged so we
+  // still get *something* before falling through to Internet Archive.
+  if (!fsResults.length) {
+    fsResults = await freesoundSearch({
+      query,
+      filter: "duration:[20 TO 180]",
+      sort: "rating_desc",
+    });
+  }
   const fsHit = await downloadFirstFreesoundPreview(fsResults, outputPath);
   if (fsHit) {
     if (tracker) tracker.addExternal("freesound_download");

@@ -1,17 +1,50 @@
-// GET /api/frames — list installed frame packs (design systems).
-// Each pack: name, whether it's the default, and a showcase URL when the
-// canonical reference render is available (served at /frames/:name/showcase).
+// GET /api/frames — list installed frame packs (design systems) for the
+// template-style gallery. Each pack carries a display label, a one-line vibe,
+// its palette, and a preview video + poster when rendered (served statically
+// from /frames/<name>/preview.mp4). Picking a pack steers generation into that
+// look; picking none ("auto") lets the AI choose.
 
+const fs = require("node:fs");
+const path = require("node:path");
 const express = require("express");
+const config = require("../config");
 const frameRegistry = require("../services/frame_registry");
 
 const router = express.Router();
+
+const PUBLIC_FRAMES = path.join(config.paths.root, "public", "frames");
+
+// Pull a clean display label + one-line vibe out of FRAME.md frontmatter.
+function packMeta(name) {
+  const md = frameRegistry.getFrameMd(name) || "";
+  const fm = (md.match(/^---\r?\n([\s\S]*?)\r?\n---/) || [])[1] || md;
+  let label = (fm.match(/^name:\s*"?(.+?)"?\s*$/m) || [])[1] || name;
+  label = label.replace(/\s*[—-]\s*Frame.*$/i, "").trim(); // drop "— Frame (video…)"
+  // description: > may be a folded block over several indented lines.
+  let vibe = "";
+  const d = fm.match(/^description:\s*>?\s*\r?\n((?:[ \t]+.+\r?\n?)+)/m);
+  if (d) vibe = d[1].split(/\r?\n/).map((l) => l.trim()).filter(Boolean).join(" ");
+  else vibe = (fm.match(/^description:\s*"?(.+?)"?\s*$/m) || [])[1] || "";
+  vibe = vibe.replace(/\s+/g, " ").trim();
+  if (vibe.length > 180) vibe = vibe.slice(0, 177).trimEnd() + "…";
+  const tokens = frameRegistry.getPackTokens(name) || { colors: {}, fonts: [] };
+  return { label, vibe, colors: Object.values(tokens.colors || {}).slice(0, 6), fonts: tokens.fonts || [] };
+}
+
+function mediaUrls(name) {
+  const dir = path.join(PUBLIC_FRAMES, name);
+  const preview = fs.existsSync(path.join(dir, "preview.mp4")) ? `/frames/${name}/preview.mp4` : null;
+  const poster = fs.existsSync(path.join(dir, "poster.jpg")) ? `/frames/${name}/poster.jpg` : null;
+  return { previewUrl: preview, posterUrl: poster };
+}
 
 router.get("/frames", (_req, res) => {
   const def = frameRegistry.defaultPack();
   const packs = frameRegistry.listPacks().map((name) => ({
     name,
     default: name === def,
+    ...packMeta(name),
+    ...mediaUrls(name),
     showcaseUrl: frameRegistry.getShowcasePath(name) ? `/api/frames/${name}/showcase` : null,
   }));
   res.json({ packs, defaultPack: def });

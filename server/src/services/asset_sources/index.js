@@ -11,6 +11,7 @@
 const fs = require("node:fs");
 const config = require("../../config");
 const localDb = require("./local_db");
+const curated = require("./curated_library");
 const util = require("./util");
 
 const PROVIDERS = {
@@ -37,11 +38,29 @@ function hasProviderFor(type) {
 }
 
 // Acquire one asset. Returns { path, query, source, license, sourceUrl,
-// width, height, fromCache } or null.
-async function acquire({ query, fallbackQueries = [], type, orientation, outputPath, tracker }) {
+// width, height, fromCache, libraryId } or null.
+//
+// `kindPref` ("photo" | "illustration" | "vector") biases the curated library
+// toward the right asset shape for the need's role. `excludeIds` (Set) skips
+// curated entries already used in this video so a film never reuses a file.
+async function acquire({ query, fallbackQueries = [], type, orientation, outputPath, tracker, kindPref, excludeIds }) {
   const queries = [query, ...fallbackQueries].filter(Boolean);
 
-  // 1 — our database first.
+  // 0 — the curated local library (user's pre-loaded packs), stills only.
+  // Highest priority: hand-picked, license-clean, offline. The file keeps its
+  // real extension (svg/png/jpg), so we return the actual written path.
+  if (type === "image") {
+    for (const q of queries) {
+      const hits = curated.search({ query: q, type, limit: 8, kindPref, excludeIds });
+      if (hits.length) {
+        const meta = curated.materialize(hits[0], outputPath);
+        if (tracker) tracker.addExternal("asset_library_hit");
+        return { path: meta.path, query: q, fromCache: true, libraryId: hits[0].id, ...meta };
+      }
+    }
+  }
+
+  // 1 — our fetch cache.
   for (const q of queries) {
     const hits = localDb.search({ query: q, type, orientation });
     if (hits.length) {

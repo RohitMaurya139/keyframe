@@ -1,0 +1,1 @@
+[StaticGuard] Invalid HyperFrame contract: Composition loads fonts from fonts.googleapis.com. External font requests fail in sandboxed/offline renders and add latency. Use local @font-face declarations with captured .woff2 files instead.

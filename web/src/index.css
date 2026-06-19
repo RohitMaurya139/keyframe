@@ -18,8 +18,9 @@
   --color-line: rgba(120, 110, 150, 0.16);
   --color-ink: #272733;
   --color-dim: #5c5c6e;
-  --color-accent: #ff6b57;            /* coral — primary action */
+  --color-accent: #ff6b57;            /* coral — primary action (FILLS/borders only) */
   --color-accent-dim: #d2552f;
+  --color-accent-text: #c2410c;       /* coral-as-TEXT — passes WCAG AA on light */
 
   /* the Solstice department palette — use freely for chips/labels */
   --color-sun: #f5a623;
@@ -45,6 +46,13 @@ html { background: var(--color-ground); } /* pre-mount fallback */
 
 ::selection { background: var(--color-accent); color: #fff6ec; }
 
+/* Global keyboard focus ring — visible on every interactive element. */
+:focus-visible {
+  outline: 3px solid var(--color-sky);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
 /* Night mode — SolsticeSky toggles .solstice-night on <html>
    when the sun has set (premiere). Semantic tokens flip, so
    every text-ink / text-dim / bg-panel / border-line follows. */
@@ -54,22 +62,26 @@ html { background: var(--color-ground); } /* pre-mount fallback */
   --color-panel: rgba(30, 34, 64, 0.55);
   --color-line: rgba(190, 205, 255, 0.18);
   --color-accent-dim: #ff8a77;
+  --color-accent-text: #ff8a77;       /* coral-as-TEXT on night surfaces */
 }
 
 /* ---------- Solstice recipes (optional helpers) ---------- */
 
 /* Frosted glass card — the Solstice panel. */
 .glass-card {
-  background: var(--color-panel);
+  background: rgba(255, 255, 255, 0.82);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(40, 30, 50, 0.10);
   border-radius: 22px;
-  box-shadow: 0 12px 30px rgba(90, 80, 60, 0.1);
+  box-shadow: 0 8px 24px rgba(40, 30, 50, 0.10),
+              inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 .solstice-night .glass-card {
+  background: rgba(28, 32, 60, 0.62);
   border-color: rgba(190, 205, 255, 0.16);
-  box-shadow: 0 12px 30px rgba(8, 10, 24, 0.35);
+  box-shadow: 0 8px 24px rgba(8, 10, 24, 0.35),
+              inset 0 1px 0 rgba(190, 205, 255, 0.10);
 }
 
 /* Primary action — coral→amber pill. */
@@ -78,7 +90,7 @@ html { background: var(--color-ground); } /* pre-mount fallback */
   border: none; border-radius: 999px; cursor: pointer;
   padding: 0.85rem 1.7rem;
   font-family: var(--font-display); font-weight: 700; letter-spacing: 0.08em;
-  color: #fff6ec;
+  color: #2a1206;            /* near-ink label — ~6:1 on the warm gradient (WCAG AA) */
   background: linear-gradient(135deg, #ff6b57, #f5a623);
   box-shadow: 0 10px 24px rgba(255, 107, 87, 0.35);
   transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s;
@@ -124,6 +136,22 @@ html { background: var(--color-ground); } /* pre-mount fallback */
 @keyframes softPulse { 50% { opacity: 0.35; } }
 @keyframes floaty { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-14px); } }
 @keyframes shimmer { from { transform: translateX(-130%) skewX(-18deg); } to { transform: translateX(260%) skewX(-18deg); } }
+
+/* Shimmer sweep — a skewed light strip that crosses a CTA (e.g. hero button).
+   Apply to the element; it clips a translucent gradient band that animates. */
+.shimmer-sweep { position: relative; overflow: hidden; }
+.shimmer-sweep::after {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; bottom: 0;
+  width: 40%;
+  pointer-events: none;
+  background: linear-gradient(90deg,
+    transparent,
+    rgba(255, 255, 255, 0.45),
+    transparent);
+  animation: shimmer 2.6s ease-in-out infinite;
+}
 
 /* Film grain — kept from the original identity, now at 2% over glass. */
 .grain::after {

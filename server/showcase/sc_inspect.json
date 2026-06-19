@@ -1,0 +1,3202 @@
+{
+  "schemaVersion": 1,
+  "duration": 33,
+  "samples": [
+    0,
+    0.075,
+    0.15,
+    0.175,
+    0.2,
+    0.3,
+    0.4,
+    0.45,
+    0.5,
+    0.55,
+    0.6,
+    0.675,
+    0.75,
+    0.765,
+    0.78,
+    0.89,
+    1,
+    1.05,
+    1.1,
+    1.4,
+    1.7,
+    1.833,
+    1.9,
+    2.1,
+    2.34,
+    2.58,
+    2.815,
+    3.05,
+    3.175,
+    3.3,
+    3.35,
+    3.4,
+    3.45,
+    3.5,
+    3.6,
+    3.7,
+    3.725,
+    3.75,
+    3.8,
+    3.85,
+    3.875,
+    3.9,
+    4.1,
+    4.3,
+    4.35,
+    4.4,
+    4.5,
+    4.6,
+    5,
+    5.4,
+    5.45,
+    5.5,
+    5.65,
+    5.8,
+    6.225,
+    6.65,
+    6.775,
+    6.9,
+    6.95,
+    7,
+    7.05,
+    7.1,
+    7.15,
+    7.2,
+    7.25,
+    7.3,
+    7.35,
+    7.4,
+    7.425,
+    7.45,
+    7.475,
+    7.5,
+    7.6,
+    7.7,
+    7.75,
+    7.8,
+    7.95,
+    8.1,
+    8.25,
+    8.4,
+    8.425,
+    8.45,
+    8.725,
+    9,
+    9.167,
+    9.2,
+    9.4,
+    9.75,
+    10.1,
+    10.35,
+    10.6,
+    10.75,
+    10.9,
+    10.95,
+    11,
+    11.05,
+    11.1,
+    11.175,
+    11.25,
+    11.325,
+    11.4,
+    11.45,
+    11.5,
+    11.55,
+    11.6,
+    11.65,
+    11.7,
+    11.75,
+    11.8,
+    11.95,
+    12.1,
+    12.15,
+    12.2,
+    12.29,
+    12.38,
+    12.52,
+    12.66,
+    12.833,
+    13.33,
+    14,
+    14.05,
+    14.1,
+    14.2,
+    14.3,
+    14.35,
+    14.4,
+    14.45,
+    14.5,
+    14.6,
+    14.7,
+    14.75,
+    14.8,
+    14.825,
+    14.85,
+    14.875,
+    14.9,
+    14.95,
+    15,
+    15.1,
+    15.2,
+    15.25,
+    15.3,
+    15.35,
+    15.4,
+    15.65,
+    15.9,
+    15.98,
+    16.06,
+    16.18,
+    16.3,
+    16.475,
+    16.5,
+    16.65,
+    17.225,
+    17.8,
+    17.95,
+    18.1,
+    18.15,
+    18.2,
+    18.25,
+    18.3,
+    18.35,
+    18.4,
+    18.5,
+    18.6,
+    18.625,
+    18.65,
+    18.675,
+    18.7,
+    18.725,
+    18.75,
+    18.775,
+    18.8,
+    18.85,
+    18.9,
+    18.925,
+    18.95,
+    19.025,
+    19.1,
+    19.535,
+    19.97,
+    20.135,
+    20.167,
+    20.3,
+    20.45,
+    20.6,
+    21,
+    21.4,
+    21.55,
+    21.7,
+    21.75,
+    21.8,
+    21.85,
+    21.9,
+    22.05,
+    22.2,
+    22.225,
+    22.25,
+    22.275,
+    22.3,
+    22.33,
+    22.36,
+    22.44,
+    22.52,
+    22.56,
+    22.6,
+    22.76,
+    22.92,
+    23.06,
+    23.2,
+    23.3,
+    23.4,
+    23.48,
+    23.56,
+    23.64,
+    23.72,
+    23.833,
+    24.26,
+    24.8,
+    25,
+    25.2,
+    25.35,
+    25.5,
+    25.55,
+    25.6,
+    25.65,
+    25.7,
+    25.75,
+    25.8,
+    25.875,
+    25.95,
+    26.025,
+    26.1,
+    26.15,
+    26.2,
+    26.25,
+    26.3,
+    26.4,
+    26.5,
+    26.6,
+    26.7,
+    26.75,
+    26.8,
+    26.95,
+    27.1,
+    27.15,
+    27.2,
+    27.25,
+    27.3,
+    27.45,
+    27.5,
+    27.6,
+    27.75,
+    27.9,
+    28.2,
+    28.5,
+    28.55,
+    28.6,
+    28.75,
+    28.9,
+    28.95,
+    29,
+    29.05,
+    29.1,
+    29.175,
+    29.25,
+    29.325,
+    29.4,
+    29.45,
+    29.5,
+    29.65,
+    29.8,
+    29.85,
+    29.9,
+    29.925,
+    29.95,
+    29.975,
+    30,
+    30.1,
+    30.2,
+    30.25,
+    30.3,
+    30.375,
+    30.45,
+    30.525,
+    30.6,
+    30.675,
+    30.75,
+    30.825,
+    30.9,
+    30.95,
+    31,
+    31.167,
+    31.175,
+    31.35,
+    31.4,
+    31.45,
+    31.925,
+    32.4,
+    32.6,
+    32.8,
+    32.9,
+    33
+  ],
+  "transitionSamples": [
+    0,
+    0.075,
+    0.15,
+    0.175,
+    0.2,
+    0.3,
+    0.4,
+    0.45,
+    0.5,
+    0.55,
+    0.6,
+    0.675,
+    0.75,
+    0.765,
+    0.78,
+    0.89,
+    1,
+    1.05,
+    1.1,
+    1.4,
+    1.7,
+    1.9,
+    2.1,
+    2.34,
+    2.58,
+    2.815,
+    3.05,
+    3.175,
+    3.3,
+    3.35,
+    3.4,
+    3.45,
+    3.5,
+    3.6,
+    3.7,
+    3.725,
+    3.75,
+    3.8,
+    3.85,
+    3.875,
+    3.9,
+    4.1,
+    4.3,
+    4.35,
+    4.4,
+    4.5,
+    4.6,
+    5,
+    5.4,
+    5.45,
+    5.5,
+    5.65,
+    5.8,
+    6.225,
+    6.65,
+    6.775,
+    6.9,
+    6.95,
+    7,
+    7.05,
+    7.1,
+    7.15,
+    7.2,
+    7.25,
+    7.3,
+    7.35,
+    7.4,
+    7.425,
+    7.45,
+    7.475,
+    7.5,
+    7.6,
+    7.7,
+    7.75,
+    7.8,
+    7.95,
+    8.1,
+    8.25,
+    8.4,
+    8.425,
+    8.45,
+    8.725,
+    9,
+    9.2,
+    9.4,
+    9.75,
+    10.1,
+    10.35,
+    10.6,
+    10.75,
+    10.9,
+    10.95,
+    11,
+    11.05,
+    11.1,
+    11.175,
+    11.25,
+    11.325,
+    11.4,
+    11.45,
+    11.5,
+    11.55,
+    11.6,
+    11.65,
+    11.7,
+    11.75,
+    11.8,
+    11.95,
+    12.1,
+    12.15,
+    12.2,
+    12.29,
+    12.38,
+    12.52,
+    12.66,
+    13.33,
+    14,
+    14.05,
+    14.1,
+    14.2,
+    14.3,
+    14.35,
+    14.4,
+    14.45,
+    14.5,
+    14.6,
+    14.7,
+    14.75,
+    14.8,
+    14.825,
+    14.85,
+    14.875,
+    14.9,
+    14.95,
+    15,
+    15.1,
+    15.2,
+    15.25,
+    15.3,
+    15.35,
+    15.4,
+    15.65,
+    15.9,
+    15.98,
+    16.06,
+    16.18,
+    16.3,
+    16.475,
+    16.65,
+    17.225,
+    17.8,
+    17.95,
+    18.1,
+    18.15,
+    18.2,
+    18.25,
+    18.3,
+    18.35,
+    18.4,
+    18.5,
+    18.6,
+    18.625,
+    18.65,
+    18.675,
+    18.7,
+    18.725,
+    18.75,
+    18.775,
+    18.8,
+    18.85,
+    18.9,
+    18.925,
+    18.95,
+    19.025,
+    19.1,
+    19.535,
+    19.97,
+    20.135,
+    20.3,
+    20.45,
+    20.6,
+    21,
+    21.4,
+    21.55,
+    21.7,
+    21.75,
+    21.8,
+    21.85,
+    21.9,
+    22.05,
+    22.2,
+    22.225,
+    22.25,
+    22.275,
+    22.3,
+    22.33,
+    22.36,
+    22.44,
+    22.52,
+    22.56,
+    22.6,
+    22.76,
+    22.92,
+    23.06,
+    23.2,
+    23.3,
+    23.4,
+    23.48,
+    23.56,
+    23.64,
+    23.72,
+    24.26,
+    24.8,
+    25,
+    25.2,
+    25.35,
+    25.5,
+    25.55,
+    25.6,
+    25.65,
+    25.7,
+    25.75,
+    25.8,
+    25.875,
+    25.95,
+    26.025,
+    26.1,
+    26.15,
+    26.2,
+    26.25,
+    26.3,
+    26.4,
+    26.5,
+    26.6,
+    26.7,
+    26.75,
+    26.8,
+    26.95,
+    27.1,
+    27.15,
+    27.2,
+    27.25,
+    27.3,
+    27.45,
+    27.6,
+    27.75,
+    27.9,
+    28.2,
+    28.5,
+    28.55,
+    28.6,
+    28.75,
+    28.9,
+    28.95,
+    29,
+    29.05,
+    29.1,
+    29.175,
+    29.25,
+    29.325,
+    29.4,
+    29.45,
+    29.5,
+    29.65,
+    29.8,
+    29.85,
+    29.9,
+    29.925,
+    29.95,
+    29.975,
+    30,
+    30.1,
+    30.2,
+    30.25,
+    30.3,
+    30.375,
+    30.45,
+    30.525,
+    30.6,
+    30.675,
+    30.75,
+    30.825,
+    30.9,
+    30.95,
+    31,
+    31.175,
+    31.35,
+    31.4,
+    31.45,
+    31.925,
+    32.4,
+    32.6,
+    32.8,
+    32.9,
+    33
+  ],
+  "transitionSamplesDropped": 0,
+  "tolerance": 2,
+  "strict": false,
+  "collapseStatic": true,
+  "ok": false,
+  "errorCount": 13,
+  "warningCount": 626,
+  "infoCount": 1,
+  "issueCount": 640,
+  "totalIssueCount": 640,
+  "truncated": true,
+  "issues": [
+    {
+      "code": "clipped_text",
+      "severity": "error",
+      "time": 3.45,
+      "selector": "#s1",
+      "text": "UNTITLED.SCRIPT Every video starts as a blank page. Every video starts as a blank page.",
+      "message": "Text content is clipped by its own box.",
+      "rect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "right": 93,
+        "bottom": 52
+      },
+      "fixHint": "Text is 1920px x 1080px inside 1920px x 1080px and overflows by up to 93px; resize the text box to at least ~2013px x 1132px, or allow wrapping with max-width/fitTextFontSize.",
+      "firstSeen": 3.45,
+      "lastSeen": 3.45,
+      "occurrences": 1
+    },
+    {
+      "code": "text_box_overflow",
+      "severity": "error",
+      "time": 3.45,
+      "selector": "#s1",
+      "containerSelector": "#s1",
+      "text": "UNTITLED.SCRIPT Every video starts as a blank page. Every video starts as a blank page.",
+      "message": "Text extends outside its nearest visual/container box.",
+      "rect": {
+        "left": -92.64,
+        "top": -52.11,
+        "right": 2012.64,
+        "bottom": 1132.11,
+        "width": 2105.28,
+        "height": 1184.22
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 92.64,
+        "right": 92.64,
+        "top": 52.11,
+        "bottom": 52.11
+      },
+      "fixHint": "Text is 2105px x 1184px inside 1920px x 1080px and overflows by up to 93px; resize the container to at least ~2105px x 1184px or shrink font-size from 16px to ~15px, or allow wrapping with max-width/fitTextFontSize.",
+      "firstSeen": 3.45,
+      "lastSeen": 3.45,
+      "occurrences": 1
+    },
+    {
+      "code": "text_box_overflow",
+      "severity": "error",
+      "time": 3.5,
+      "selector": "#s2-l1",
+      "containerSelector": "div.safe > div:nth-of-type(1)",
+      "text": "What if the page",
+      "message": "Text extends outside its nearest visual/container box.",
+      "rect": {
+        "left": 658.23,
+        "top": 548.83,
+        "right": 1157.05,
+        "bottom": 762.73,
+        "width": 498.81,
+        "height": 213.91
+      },
+      "containerRect": {
+        "left": 586.06,
+        "top": 325.97,
+        "right": 1333.92,
+        "bottom": 537.13,
+        "width": 747.86,
+        "height": 211.16
+      },
+      "overflow": {
+        "bottom": 225.6
+      },
+      "fixHint": "Text is 499px x 214px inside 748px x 211px and overflows by up to 226px; increase the container height to at least ~437px or shrink font-size from 96px to ~95px, or allow wrapping with max-width/fitTextFontSize.",
+      "firstSeen": 3.5,
+      "lastSeen": 3.725,
+      "occurrences": 4
+    },
+    {
+      "code": "text_box_overflow",
+      "severity": "error",
+      "time": 3.5,
+      "selector": "#s2-em",
+      "containerSelector": "div.safe > div:nth-of-type(2)",
+      "text": "direct itself?",
+      "message": "Text extends outside its nearest visual/container box.",
+      "rect": {
+        "left": 758.53,
+        "top": 540.55,
+        "right": 1171.55,
+        "bottom": 754.45,
+        "width": 413.02,
+        "height": 213.91
+      },
+      "containerRect": {
+        "left": 537.44,
+        "top": 542.88,
+        "right": 1382.55,
+        "bottom": 754.03,
+        "width": 845.11,
+        "height": 211.16
+      },
+      "overflow": {
+        "top": 2.33
+      },
+      "fixHint": "Text is 413px x 214px inside 845px x 211px and overflows by up to 2px; increase the container height to at least ~213px or shrink font-size from 96px to ~95px, or allow wrapping with max-width/fitTextFontSize.",
+      "firstSeen": 3.5,
+      "lastSeen": 7.05,
+      "occurrences": 28
+    },
+    {
+      "code": "text_occluded",
+      "severity": "error",
+      "time": 3.6,
+      "selector": "#s2-l1",
+      "containerSelector": "#s2-em",
+      "text": "What if the page",
+      "message": "Text is hidden beneath an opaque element.",
+      "rect": {
+        "left": 658.23,
+        "top": 548.83,
+        "right": 1157.05,
+        "bottom": 762.73,
+        "width": 498.81,
+        "height": 213.91
+      },
+      "fixHint": "Give the text its own zone, raise its stacking order above the covering element, or mark intentional layering with data-layout-allow-occlusion.",
+      "firstSeen": 3.6,
+      "lastSeen": 3.875,
+      "occurrences": 7
+    },
+    {
+      "code": "text_box_overflow",
+      "severity": "error",
+      "time": 3.75,
+      "selector": "#s2-l1",
+      "containerSelector": "div.safe > div:nth-of-type(1)",
+      "text": "What if the page",
+      "message": "Text extends outside its nearest visual/container box.",
+      "rect": {
+        "left": 658.23,
+        "top": 500.08,
+        "right": 1157.05,
+        "bottom": 713.98,
+        "width": 498.81,
+        "height": 213.91
+      },
+      "containerRect": {
+        "left": 586.06,
+        "top": 325.97,
+        "right": 1333.92,
+        "bottom": 537.13,
+        "width": 747.86,
+        "height": 211.16
+      },
+      "overflow": {
+        "bottom": 176.85
+      },
+      "fixHint": "Text is 499px x 214px inside 748px x 211px and overflows by up to 177px; increase the container height to at least ~388px or shrink font-size from 96px to ~95px, or allow wrapping with max-width/fitTextFontSize.",
+      "firstSeen": 3.75,
+      "lastSeen": 3.75,
+      "occurrences": 1
+    },
+    {
+      "code": "text_box_overflow",
+      "severity": "error",
+      "time": 3.8,
+      "selector": "#s2-l1",
+      "containerSelector": "div.safe > div:nth-of-type(1)",
+      "text": "What if the page",
+      "message": "Text extends outside its nearest visual/container box.",
+      "rect": {
+        "left": 658.23,
+        "top": 427.83,
+        "right": 1157.05,
+        "bottom": 641.73,
+        "width": 498.81,
+        "height": 213.91
+      },
+      "containerRect": {
+        "left": 586.06,
+        "top": 325.97,
+        "right": 1333.92,
+        "bottom": 537.13,
+        "width": 747.86,
+        "height": 211.16
+      },
+      "overflow": {
+        "bottom": 104.6
+      },
+      "fixHint": "Text is 499px x 214px inside 748px x 211px and overflows by up to 105px; increase the container height to at least ~316px or shrink font-size from 96px to ~95px, or allow wrapping with max-width/fitTextFontSize.",
+      "firstSeen": 3.8,
+      "lastSeen": 3.8,
+      "occurrences": 1
+    },
+    {
+      "code": "text_box_overflow",
+      "severity": "error",
+      "time": 3.85,
+      "selector": "#s2-l1",
+      "containerSelector": "div.safe > div:nth-of-type(1)",
+      "text": "What if the page",
+      "message": "Text extends outside its nearest visual/container box.",
+      "rect": {
+        "left": 658.23,
+        "top": 401.93,
+        "right": 1157.05,
+        "bottom": 615.83,
+        "width": 498.81,
+        "height": 213.91
+      },
+      "containerRect": {
+        "left": 586.06,
+        "top": 325.97,
+        "right": 1333.92,
+        "bottom": 537.13,
+        "width": 747.86,
+        "height": 211.16
+      },
+      "overflow": {
+        "bottom": 78.7
+      },
+      "fixHint": "Text is 499px x 214px inside 748px x 211px and overflows by up to 79px; increase the container height to at least ~290px or shrink font-size from 96px to ~95px, or allow wrapping with max-width/fitTextFontSize.",
+      "firstSeen": 3.85,
+      "lastSeen": 3.85,
+      "occurrences": 1
+    },
+    {
+      "code": "text_box_overflow",
+      "severity": "error",
+      "time": 3.875,
+      "selector": "#s2-l1",
+      "containerSelector": "div.safe > div:nth-of-type(1)",
+      "text": "What if the page",
+      "message": "Text extends outside its nearest visual/container box.",
+      "rect": {
+        "left": 658.23,
+        "top": 381.46,
+        "right": 1157.05,
+        "bottom": 595.36,
+        "width": 498.81,
+        "height": 213.91
+      },
+      "containerRect": {
+        "left": 586.06,
+        "top": 325.97,
+        "right": 1333.92,
+        "bottom": 537.13,
+        "width": 747.86,
+        "height": 211.16
+      },
+      "overflow": {
+        "bottom": 58.23
+      },
+      "fixHint": "Text is 499px x 214px inside 748px x 211px and overflows by up to 58px; increase the container height to at least ~269px or shrink font-size from 96px to ~95px, or allow wrapping with max-width/fitTextFontSize.",
+      "firstSeen": 3.875,
+      "lastSeen": 3.875,
+      "occurrences": 1
+    },
+    {
+      "code": "text_box_overflow",
+      "severity": "error",
+      "time": 3.9,
+      "selector": "#s2-l1",
+      "containerSelector": "div.safe > div:nth-of-type(1)",
+      "text": "What if the page",
+      "message": "Text extends outside its nearest visual/container box.",
+      "rect": {
+        "left": 658.23,
+        "top": 365.51,
+        "right": 1157.05,
+        "bottom": 579.42,
+        "width": 498.81,
+        "height": 213.91
+      },
+      "containerRect": {
+        "left": 586.06,
+        "top": 325.97,
+        "right": 1333.92,
+        "bottom": 537.13,
+        "width": 747.86,
+        "height": 211.16
+      },
+      "overflow": {
+        "bottom": 42.29
+      },
+      "fixHint": "Text is 499px x 214px inside 748px x 211px and overflows by up to 42px; increase the container height to at least ~253px or shrink font-size from 96px to ~95px, or allow wrapping with max-width/fitTextFontSize.",
+      "firstSeen": 3.9,
+      "lastSeen": 3.9,
+      "occurrences": 1
+    },
+    {
+      "code": "text_box_overflow",
+      "severity": "error",
+      "time": 4.1,
+      "selector": "#s2-l1",
+      "containerSelector": "div.safe > div:nth-of-type(1)",
+      "text": "What if the page",
+      "message": "Text extends outside its nearest visual/container box.",
+      "rect": {
+        "left": 658.23,
+        "top": 326.9,
+        "right": 1157.05,
+        "bottom": 540.8,
+        "width": 498.81,
+        "height": 213.91
+      },
+      "containerRect": {
+        "left": 586.06,
+        "top": 325.97,
+        "right": 1333.92,
+        "bottom": 537.13,
+        "width": 747.86,
+        "height": 211.16
+      },
+      "overflow": {
+        "bottom": 3.67
+      },
+      "fixHint": "Text is 499px x 214px inside 748px x 211px and overflows by up to 4px; increase the container height to at least ~215px or shrink font-size from 96px to ~95px, or allow wrapping with max-width/fitTextFontSize.",
+      "firstSeen": 4.1,
+      "lastSeen": 4.1,
+      "occurrences": 1
+    },
+    {
+      "code": "text_box_overflow",
+      "severity": "error",
+      "time": 4.3,
+      "selector": "#s2-l1",
+      "containerSelector": "div.safe > div:nth-of-type(1)",
+      "text": "What if the page",
+      "message": "Text extends outside its nearest visual/container box.",
+      "rect": {
+        "left": 658.23,
+        "top": 323.65,
+        "right": 1157.05,
+        "bottom": 537.56,
+        "width": 498.81,
+        "height": 213.91
+      },
+      "containerRect": {
+        "left": 586.06,
+        "top": 325.97,
+        "right": 1333.92,
+        "bottom": 537.13,
+        "width": 747.86,
+        "height": 211.16
+      },
+      "overflow": {
+        "top": 2.32
+      },
+      "fixHint": "Text is 499px x 214px inside 748px x 211px and overflows by up to 2px; increase the container height to at least ~213px or shrink font-size from 96px to ~95px, or allow wrapping with max-width/fitTextFontSize.",
+      "firstSeen": 4.3,
+      "lastSeen": 4.3,
+      "occurrences": 1
+    },
+    {
+      "code": "text_box_overflow",
+      "severity": "error",
+      "time": 4.35,
+      "selector": "#s2-l1",
+      "containerSelector": "div.safe > div:nth-of-type(1)",
+      "text": "What if the page",
+      "message": "Text extends outside its nearest visual/container box.",
+      "rect": {
+        "left": 658.23,
+        "top": 323.64,
+        "right": 1157.05,
+        "bottom": 537.55,
+        "width": 498.81,
+        "height": 213.91
+      },
+      "containerRect": {
+        "left": 586.06,
+        "top": 325.97,
+        "right": 1333.92,
+        "bottom": 537.13,
+        "width": 747.86,
+        "height": 211.16
+      },
+      "overflow": {
+        "top": 2.33
+      },
+      "fixHint": "Text is 499px x 214px inside 748px x 211px and overflows by up to 2px; increase the container height to at least ~213px or shrink font-size from 96px to ~95px, or allow wrapping with max-width/fitTextFontSize.",
+      "firstSeen": 4.35,
+      "lastSeen": 7.05,
+      "occurrences": 17
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 0.15,
+      "selector": "#sun-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -345.53,
+        "top": -537.54,
+        "right": 1152.06,
+        "bottom": 960.05,
+        "width": 1497.59,
+        "height": 1497.59
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 345.53,
+        "top": 537.54
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 0.15,
+      "lastSeen": 0.15,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 0.15,
+      "selector": "#moon-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": 767.84,
+        "top": 119.85,
+        "right": 2342.38,
+        "bottom": 1694.4,
+        "width": 1574.55,
+        "height": 1574.55
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "right": 422.38,
+        "bottom": 614.4
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 0.15,
+      "lastSeen": 18.15,
+      "occurrences": 2
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 0.175,
+      "selector": "#sun-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -345.57,
+        "top": -537.58,
+        "right": 1152.18,
+        "bottom": 960.16,
+        "width": 1497.74,
+        "height": 1497.74
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 345.57,
+        "top": 537.58
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 0.175,
+      "lastSeen": 21.85,
+      "occurrences": 2
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 0.175,
+      "selector": "#moon-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": 767.79,
+        "top": 119.81,
+        "right": 2342.34,
+        "bottom": 1694.36,
+        "width": 1574.55,
+        "height": 1574.55
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "right": 422.34,
+        "bottom": 614.36
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 0.175,
+      "lastSeen": 0.175,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 0.2,
+      "selector": "#sun-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -345.52,
+        "top": -537.55,
+        "right": 1152.22,
+        "bottom": 960.2,
+        "width": 1497.74,
+        "height": 1497.74
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 345.52,
+        "top": 537.55
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 0.2,
+      "lastSeen": 22.225,
+      "occurrences": 4
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 0.2,
+      "selector": "#moon-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": 767.65,
+        "top": 119.69,
+        "right": 2342.36,
+        "bottom": 1694.4,
+        "width": 1574.71,
+        "height": 1574.71
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "right": 422.36,
+        "bottom": 614.4
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 0.2,
+      "lastSeen": 18.2,
+      "occurrences": 3
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 0.3,
+      "selector": "#sun-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -345.41,
+        "top": -537.47,
+        "right": 1152.48,
+        "bottom": 960.42,
+        "width": 1497.89,
+        "height": 1497.89
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 345.41,
+        "top": 537.47
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 0.3,
+      "lastSeen": 22.33,
+      "occurrences": 4
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 0.3,
+      "selector": "#moon-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": 767.25,
+        "top": 119.34,
+        "right": 2342.27,
+        "bottom": 1694.36,
+        "width": 1575.02,
+        "height": 1575.02
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "right": 422.27,
+        "bottom": 614.36
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 0.3,
+      "lastSeen": 18.3,
+      "occurrences": 2
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 0.4,
+      "selector": "#sun-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -345.31,
+        "top": -537.41,
+        "right": 1152.88,
+        "bottom": 960.79,
+        "width": 1498.19,
+        "height": 1498.19
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 345.31,
+        "top": 537.41
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 0.4,
+      "lastSeen": 0.4,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 0.4,
+      "selector": "#moon-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": 766.68,
+        "top": 118.84,
+        "right": 2342.17,
+        "bottom": 1694.33,
+        "width": 1575.49,
+        "height": 1575.49
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "right": 422.17,
+        "bottom": 614.33
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 0.4,
+      "lastSeen": 18.4,
+      "occurrences": 2
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 0.4,
+      "selector": "#s1-cam",
+      "containerSelector": "#s1",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -2.5,
+        "top": -1.4,
+        "right": 1922.5,
+        "bottom": 1081.4,
+        "width": 1924.99,
+        "height": 1082.81
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 2.5,
+        "right": 2.5
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 0.4,
+      "lastSeen": 0.4,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 0.45,
+      "selector": "#sun-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -345.28,
+        "top": -537.4,
+        "right": 1153.06,
+        "bottom": 960.95,
+        "width": 1498.34,
+        "height": 1498.34
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 345.28,
+        "top": 537.4
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 0.45,
+      "lastSeen": 22.44,
+      "occurrences": 2
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 0.45,
+      "selector": "#moon-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": 766.39,
+        "top": 118.57,
+        "right": 2342.2,
+        "bottom": 1694.38,
+        "width": 1575.81,
+        "height": 1575.81
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "right": 422.2,
+        "bottom": 614.38
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 0.45,
+      "lastSeen": 0.45,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 0.45,
+      "selector": "#s1-cam",
+      "containerSelector": "#s1",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -2.88,
+        "top": -1.62,
+        "right": 1922.88,
+        "bottom": 1081.62,
+        "width": 1925.76,
+        "height": 1083.24
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 2.88,
+        "right": 2.88
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 0.45,
+      "lastSeen": 0.45,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 0.5,
+      "selector": "#sun-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -345.13,
+        "top": -537.28,
+        "right": 1153.36,
+        "bottom": 961.21,
+        "width": 1498.49,
+        "height": 1498.49
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 345.13,
+        "top": 537.28
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 0.5,
+      "lastSeen": 22.52,
+      "occurrences": 2
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 0.5,
+      "selector": "#moon-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": 765.94,
+        "top": 118.18,
+        "right": 2342.06,
+        "bottom": 1694.3,
+        "width": 1576.12,
+        "height": 1576.12
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "right": 422.06,
+        "bottom": 614.3
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 0.5,
+      "lastSeen": 18.5,
+      "occurrences": 2
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 0.5,
+      "selector": "#s1-cam",
+      "containerSelector": "#s1",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -3.84,
+        "top": -2.16,
+        "right": 1923.84,
+        "bottom": 1082.16,
+        "width": 1927.68,
+        "height": 1084.32
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 3.84,
+        "right": 3.84,
+        "top": 2.16,
+        "bottom": 2.16
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 0.5,
+      "lastSeen": 0.5,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 0.55,
+      "selector": "#sun-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -345.08,
+        "top": -537.25,
+        "right": 1153.57,
+        "bottom": 961.39,
+        "width": 1498.64,
+        "height": 1498.64
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 345.08,
+        "top": 537.25
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 0.55,
+      "lastSeen": 22.56,
+      "occurrences": 2
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 0.55,
+      "selector": "#moon-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": 765.62,
+        "top": 117.89,
+        "right": 2342.05,
+        "bottom": 1694.33,
+        "width": 1576.44,
+        "height": 1576.44
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "right": 422.05,
+        "bottom": 614.33
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 0.55,
+      "lastSeen": 0.55,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 0.55,
+      "selector": "#s1-cam",
+      "containerSelector": "#s1",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -4.32,
+        "top": -2.43,
+        "right": 1924.32,
+        "bottom": 1082.43,
+        "width": 1928.64,
+        "height": 1084.86
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 4.32,
+        "right": 4.32,
+        "top": 2.43,
+        "bottom": 2.43
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 0.55,
+      "lastSeen": 0.55,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 0.6,
+      "selector": "#sun-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -344.95,
+        "top": -537.17,
+        "right": 1153.99,
+        "bottom": 961.77,
+        "width": 1498.94,
+        "height": 1498.94
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 344.95,
+        "top": 537.17
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 0.6,
+      "lastSeen": 22.6,
+      "occurrences": 3
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 0.6,
+      "selector": "#moon-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": 765.02,
+        "top": 117.36,
+        "right": 2341.93,
+        "bottom": 1694.27,
+        "width": 1576.91,
+        "height": 1576.91
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "right": 421.93,
+        "bottom": 614.27
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 0.6,
+      "lastSeen": 18.625,
+      "occurrences": 3
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 0.6,
+      "selector": "#s1-cam",
+      "containerSelector": "#s1",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -5.47,
+        "top": -3.08,
+        "right": 1925.47,
+        "bottom": 1083.08,
+        "width": 1930.94,
+        "height": 1086.16
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 5.47,
+        "right": 5.47,
+        "top": 3.08,
+        "bottom": 3.08
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 0.6,
+      "lastSeen": 0.6,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 0.675,
+      "selector": "#sun-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -344.79,
+        "top": -537.06,
+        "right": 1154.45,
+        "bottom": 962.18,
+        "width": 1499.24,
+        "height": 1499.24
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 344.79,
+        "top": 537.06
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 0.675,
+      "lastSeen": 0.675,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 0.675,
+      "selector": "#moon-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": 764.3,
+        "top": 116.73,
+        "right": 2341.84,
+        "bottom": 1694.27,
+        "width": 1577.54,
+        "height": 1577.54
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "right": 421.84,
+        "bottom": 614.27
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 0.675,
+      "lastSeen": 18.675,
+      "occurrences": 2
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 0.675,
+      "selector": "#s1-cam",
+      "containerSelector": "#s1",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -6.72,
+        "top": -3.78,
+        "right": 1926.72,
+        "bottom": 1083.78,
+        "width": 1933.44,
+        "height": 1087.56
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 6.72,
+        "right": 6.72,
+        "top": 3.78,
+        "bottom": 3.78
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 0.675,
+      "lastSeen": 0.675,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 0.75,
+      "selector": "#sun-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -344.6,
+        "top": -536.93,
+        "right": 1154.94,
+        "bottom": 962.61,
+        "width": 1499.54,
+        "height": 1499.54
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 344.6,
+        "top": 536.93
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 0.75,
+      "lastSeen": 22.76,
+      "occurrences": 3
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 0.75,
+      "selector": "#moon-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": 763.55,
+        "top": 116.06,
+        "right": 2341.72,
+        "bottom": 1694.23,
+        "width": 1578.17,
+        "height": 1578.17
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "right": 421.72,
+        "bottom": 614.23
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 0.75,
+      "lastSeen": 18.75,
+      "occurrences": 3
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 0.75,
+      "selector": "#s1-cam",
+      "containerSelector": "#s1",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -8.16,
+        "top": -4.59,
+        "right": 1928.16,
+        "bottom": 1084.59,
+        "width": 1936.32,
+        "height": 1089.18
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 8.16,
+        "right": 8.16,
+        "top": 4.59,
+        "bottom": 4.59
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 0.75,
+      "lastSeen": 0.765,
+      "occurrences": 2
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 0.78,
+      "selector": "#sun-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -344.5,
+        "top": -536.85,
+        "right": 1155.19,
+        "bottom": 962.84,
+        "width": 1499.69,
+        "height": 1499.69
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 344.5,
+        "top": 536.85
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 0.78,
+      "lastSeen": 0.78,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 0.78,
+      "selector": "#moon-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": 763.07,
+        "top": 115.63,
+        "right": 2341.71,
+        "bottom": 1694.27,
+        "width": 1578.64,
+        "height": 1578.64
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "right": 421.71,
+        "bottom": 614.27
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 0.78,
+      "lastSeen": 18.775,
+      "occurrences": 2
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 0.78,
+      "selector": "#s1-cam",
+      "containerSelector": "#s1",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -8.83,
+        "top": -4.97,
+        "right": 1928.83,
+        "bottom": 1084.97,
+        "width": 1937.66,
+        "height": 1089.94
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 8.83,
+        "right": 8.83,
+        "top": 4.97,
+        "bottom": 4.97
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 0.78,
+      "lastSeen": 0.78,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 0.89,
+      "selector": "#sun-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -344.2,
+        "top": -536.66,
+        "right": 1156.09,
+        "bottom": 963.63,
+        "width": 1500.29,
+        "height": 1500.29
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 344.2,
+        "top": 536.66
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 0.89,
+      "lastSeen": 0.89,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 0.89,
+      "selector": "#moon-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": 761.75,
+        "top": 114.46,
+        "right": 2341.49,
+        "bottom": 1694.21,
+        "width": 1579.74,
+        "height": 1579.74
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "right": 421.49,
+        "bottom": 614.21
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 0.89,
+      "lastSeen": 0.89,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 0.89,
+      "selector": "#s1-cam",
+      "containerSelector": "#s1",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -11.23,
+        "top": -6.32,
+        "right": 1931.23,
+        "bottom": 1086.32,
+        "width": 1942.46,
+        "height": 1092.64
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 11.23,
+        "right": 11.23,
+        "top": 6.32,
+        "bottom": 6.32
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 0.89,
+      "lastSeen": 0.89,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 1,
+      "selector": "#sun-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -343.75,
+        "top": -536.36,
+        "right": 1157.44,
+        "bottom": 964.83,
+        "width": 1501.19,
+        "height": 1501.19
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 343.75,
+        "top": 536.36
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 1,
+      "lastSeen": 21,
+      "occurrences": 2
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 1,
+      "selector": "#moon-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": 759.71,
+        "top": 112.66,
+        "right": 2341.19,
+        "bottom": 1694.14,
+        "width": 1581.48,
+        "height": 1581.48
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "right": 421.19,
+        "bottom": 614.14
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 1,
+      "lastSeen": 19.025,
+      "occurrences": 2
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 1,
+      "selector": "#s1-cam",
+      "containerSelector": "#s1",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -14.78,
+        "top": -8.32,
+        "right": 1934.78,
+        "bottom": 1088.32,
+        "width": 1949.57,
+        "height": 1096.63
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 14.78,
+        "right": 14.78,
+        "top": 8.32,
+        "bottom": 8.32
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 1,
+      "lastSeen": 1,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 1.05,
+      "selector": "#sun-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -343.66,
+        "top": -536.3,
+        "right": 1157.83,
+        "bottom": 965.18,
+        "width": 1501.49,
+        "height": 1501.49
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 343.66,
+        "top": 536.3
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 1.05,
+      "lastSeen": 23.06,
+      "occurrences": 2
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 1.05,
+      "selector": "#moon-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": 759.16,
+        "top": 112.17,
+        "right": 2341.1,
+        "bottom": 1694.12,
+        "width": 1581.95,
+        "height": 1581.95
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "right": 421.1,
+        "bottom": 614.12
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 1.05,
+      "lastSeen": 1.05,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 1.05,
+      "selector": "#s1-cam",
+      "containerSelector": "#s1",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -15.65,
+        "top": -8.8,
+        "right": 1935.65,
+        "bottom": 1088.8,
+        "width": 1951.3,
+        "height": 1097.6
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 15.65,
+        "right": 15.65,
+        "top": 8.8,
+        "bottom": 8.8
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 1.05,
+      "lastSeen": 1.05,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 1.1,
+      "selector": "#sun-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -343.37,
+        "top": -536.1,
+        "right": 1158.57,
+        "bottom": 965.84,
+        "width": 1501.94,
+        "height": 1501.94
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 343.37,
+        "top": 536.1
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 1.1,
+      "lastSeen": 1.1,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 1.1,
+      "selector": "#moon-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": 757.94,
+        "top": 111.08,
+        "right": 2340.99,
+        "bottom": 1694.13,
+        "width": 1583.05,
+        "height": 1583.05
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "right": 420.99,
+        "bottom": 614.13
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 1.1,
+      "lastSeen": 19.1,
+      "occurrences": 2
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 1.1,
+      "selector": "#s1-cam",
+      "containerSelector": "#s1",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -17.66,
+        "top": -9.94,
+        "right": 1937.66,
+        "bottom": 1089.94,
+        "width": 1955.33,
+        "height": 1099.87
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 17.66,
+        "right": 17.66,
+        "top": 9.94,
+        "bottom": 9.94
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 1.1,
+      "lastSeen": 1.1,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 1.4,
+      "selector": "#sun-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -342.02,
+        "top": -535.21,
+        "right": 1162.61,
+        "bottom": 969.43,
+        "width": 1504.63,
+        "height": 1504.63
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 342.02,
+        "top": 535.21
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 1.4,
+      "lastSeen": 23.4,
+      "occurrences": 3
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 1.4,
+      "selector": "#moon-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": 751.86,
+        "top": 105.7,
+        "right": 2340.1,
+        "bottom": 1693.95,
+        "width": 1588.25,
+        "height": 1588.25
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "right": 420.1,
+        "bottom": 613.95
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 1.4,
+      "lastSeen": 1.4,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 1.4,
+      "selector": "#s1-cam",
+      "containerSelector": "#s1",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -27.46,
+        "top": -15.44,
+        "right": 1947.46,
+        "bottom": 1095.44,
+        "width": 1974.91,
+        "height": 1110.89
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 27.46,
+        "right": 27.46,
+        "top": 15.44,
+        "bottom": 15.44
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 1.4,
+      "lastSeen": 1.4,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 1.7,
+      "selector": "#sun-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -340.38,
+        "top": -534.11,
+        "right": 1167.55,
+        "bottom": 973.82,
+        "width": 1507.93,
+        "height": 1507.93
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 340.38,
+        "top": 534.11
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 1.7,
+      "lastSeen": 23.72,
+      "occurrences": 3
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 1.7,
+      "selector": "#moon-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": 744.47,
+        "top": 99.16,
+        "right": 2339.01,
+        "bottom": 1693.7,
+        "width": 1594.54,
+        "height": 1594.54
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "right": 419.01,
+        "bottom": 613.7
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 1.7,
+      "lastSeen": 16.3,
+      "occurrences": 2
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 1.7,
+      "selector": "#s1-cam",
+      "containerSelector": "#s1",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -38.4,
+        "top": -21.6,
+        "right": 1958.4,
+        "bottom": 1101.6,
+        "width": 1996.8,
+        "height": 1123.2
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 38.4,
+        "right": 38.4,
+        "top": 21.6,
+        "bottom": 21.6
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 1.7,
+      "lastSeen": 1.7,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 1.833,
+      "selector": "#sun-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -339.82,
+        "top": -533.76,
+        "right": 1169.45,
+        "bottom": 975.52,
+        "width": 1509.27,
+        "height": 1509.27
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 339.82,
+        "top": 533.76
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 1.833,
+      "lastSeen": 23.833,
+      "occurrences": 2
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 1.833,
+      "selector": "#moon-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": 741.71,
+        "top": 96.72,
+        "right": 2338.61,
+        "bottom": 1693.62,
+        "width": 1596.9,
+        "height": 1596.9
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "right": 418.61,
+        "bottom": 613.62
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 1.833,
+      "lastSeen": 1.833,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 1.833,
+      "selector": "#s1-cam",
+      "containerSelector": "#s1",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -42.24,
+        "top": -23.76,
+        "right": 1962.24,
+        "bottom": 1103.76,
+        "width": 2004.48,
+        "height": 1127.52
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 42.24,
+        "right": 42.24,
+        "top": 23.76,
+        "bottom": 23.76
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 1.833,
+      "lastSeen": 1.833,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 1.9,
+      "selector": "#sun-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -339.13,
+        "top": -533.28,
+        "right": 1171.35,
+        "bottom": 977.2,
+        "width": 1510.47,
+        "height": 1510.47
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 339.13,
+        "top": 533.28
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 1.9,
+      "lastSeen": 1.9,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 1.9,
+      "selector": "#moon-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": 738.8,
+        "top": 94.13,
+        "right": 2338.22,
+        "bottom": 1693.56,
+        "width": 1599.42,
+        "height": 1599.42
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "right": 418.22,
+        "bottom": 613.56
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 1.9,
+      "lastSeen": 1.9,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 1.9,
+      "selector": "#s1-cam",
+      "containerSelector": "#s1",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -46.08,
+        "top": -25.92,
+        "right": 1966.08,
+        "bottom": 1105.92,
+        "width": 2012.16,
+        "height": 1131.84
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 46.08,
+        "right": 46.08,
+        "top": 25.92,
+        "bottom": 25.92
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 1.9,
+      "lastSeen": 1.9,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 2.1,
+      "selector": "#sun-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -337.77,
+        "top": -532.39,
+        "right": 1175.55,
+        "bottom": 980.93,
+        "width": 1513.32,
+        "height": 1513.32
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 337.77,
+        "top": 532.39
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 2.1,
+      "lastSeen": 2.1,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 2.1,
+      "selector": "#moon-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": 732.59,
+        "top": 88.63,
+        "right": 2337.36,
+        "bottom": 1693.41,
+        "width": 1604.78,
+        "height": 1604.78
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "right": 417.36,
+        "bottom": 613.41
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 2.1,
+      "lastSeen": 15.9,
+      "occurrences": 2
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 2.1,
+      "selector": "#s1-cam",
+      "containerSelector": "#s1",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -53.76,
+        "top": -30.24,
+        "right": 1973.76,
+        "bottom": 1110.24,
+        "width": 2027.52,
+        "height": 1140.48
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 53.76,
+        "right": 53.76,
+        "top": 30.24,
+        "bottom": 30.24
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 2.1,
+      "lastSeen": 2.1,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 2.34,
+      "selector": "#sun-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -335.95,
+        "top": -531.16,
+        "right": 1180.81,
+        "bottom": 985.6,
+        "width": 1516.76,
+        "height": 1516.76
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 335.95,
+        "top": 531.16
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 2.34,
+      "lastSeen": 2.34,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 2.34,
+      "selector": "#moon-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": 724.8,
+        "top": 81.74,
+        "right": 2336.19,
+        "bottom": 1693.13,
+        "width": 1611.39,
+        "height": 1611.39
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "right": 416.19,
+        "bottom": 613.13
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 2.34,
+      "lastSeen": 2.34,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 2.34,
+      "selector": "#s1-cam",
+      "containerSelector": "#s1",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -62.59,
+        "top": -35.21,
+        "right": 1982.59,
+        "bottom": 1115.21,
+        "width": 2045.18,
+        "height": 1150.42
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 62.59,
+        "right": 62.59,
+        "top": 35.21,
+        "bottom": 35.21
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 2.34,
+      "lastSeen": 2.34,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 2.58,
+      "selector": "#sun-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -334.05,
+        "top": -529.89,
+        "right": 1186.61,
+        "bottom": 990.77,
+        "width": 1520.66,
+        "height": 1520.66
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 334.05,
+        "top": 529.89
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 2.58,
+      "lastSeen": 2.58,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 2.58,
+      "selector": "#moon-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": 716.34,
+        "top": 74.25,
+        "right": 2334.97,
+        "bottom": 1692.88,
+        "width": 1618.63,
+        "height": 1618.63
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "right": 414.97,
+        "bottom": 612.88
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 2.58,
+      "lastSeen": 2.58,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 2.58,
+      "selector": "#s1-cam",
+      "containerSelector": "#s1",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -70.85,
+        "top": -39.85,
+        "right": 1990.85,
+        "bottom": 1119.85,
+        "width": 2061.7,
+        "height": 1159.7
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 70.85,
+        "right": 70.85,
+        "top": 39.85,
+        "bottom": 39.85
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 2.58,
+      "lastSeen": 2.58,
+      "occurrences": 1
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 2.815,
+      "selector": "#sun-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": -331.99,
+        "top": -528.53,
+        "right": 1192.86,
+        "bottom": 996.32,
+        "width": 1524.85,
+        "height": 1524.85
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "left": 331.99,
+        "top": 528.53
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 2.815,
+      "lastSeen": 24.8,
+      "occurrences": 2
+    },
+    {
+      "code": "container_overflow",
+      "severity": "warning",
+      "time": 2.815,
+      "selector": "#moon-blob",
+      "containerSelector": "#ambient",
+      "message": "Element extends outside a clipping layout container.",
+      "rect": {
+        "left": 707.24,
+        "top": 66.18,
+        "right": 2333.75,
+        "bottom": 1692.69,
+        "width": 1626.5,
+        "height": 1626.5
+      },
+      "containerRect": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "overflow": {
+        "right": 413.75,
+        "bottom": 612.69
+      },
+      "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+      "firstSeen": 2.815,
+      "lastSeen": 15.2,
+      "occurrences": 2
+    }
+  ],
+  "_meta": {
+    "version": "0.6.112",
+    "latestVersion": "0.6.112",
+    "updateAvailable": false
+  }
+}

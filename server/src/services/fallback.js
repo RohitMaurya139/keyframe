@@ -1,12 +1,17 @@
 // Deterministic fallback composition — invoked only when every LLM pipeline
-// attempt has failed. Must NEVER itself fail: uses only inline SVG, CSS
-// gradients, and GSAP animations (no external assets, no fonts beyond
-// system-ui, no LLM calls).
+// attempt has failed. Must NEVER itself fail and must follow the same render
+// rules the hyperframes lint enforces (unique tracks, opacity-only hidden
+// states, hard kills, finite repeats, object-fit cover) so it RENDERS cleanly.
 //
-// Unlike the earlier 3-card version, this one is visually rich — animated
-// gradient background, SVG particle field, Ken-Burns-style blob motion,
-// staggered text reveals, smooth scene transitions. Built to still look
-// decent when this is all the viewer gets.
+// Two modes:
+//   • buildAssetFallback   — when real assets were fetched: a polished Ken-Burns
+//     slideshow of the actual images/video (+ a logo outro) with a caption/
+//     title layer. This guarantees a failed LLM comp still ships a video that
+//     USES the user's assets instead of a contentless gradient.
+//   • buildProceduralFallback — no assets: animated gradient + particles + text.
+//
+// Both use only inline SVG, CSS gradients, system fonts, and GSAP (no external
+// fonts, no LLM calls, no fetch).
 
 function escapeHtml(s) {
   return String(s)
@@ -15,6 +20,11 @@ function escapeHtml(s) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+function wordSpans(text) {
+  return String(text || "").trim().split(/\s+/).filter(Boolean)
+    .map((w) => `<span class="w">${escapeHtml(w)}</span>`).join(" ");
 }
 
 // Break the user's free-form prompt into reasonable scene chunks.
@@ -108,7 +118,262 @@ const DEFAULT_THEME = {
   flatText: false,
 };
 
-function buildFallback({ prompt, duration, orientation, width, height, fps = 30, storyboard, packTokens }) {
+// System-only font stack — NEVER prepend pack fonts here. A pack token like
+// "Space Grotesk" has no @font-face in a deterministic fallback, so the layout
+// inspector's StaticGuard rejects the whole composition with a font-contract
+// error ("font family used without @font-face"). The fallback must render with
+// fonts that resolve offline without declaration. (theme arg kept for signature
+// compatibility with callers.)
+function fontStackFor(_theme) {
+  return `Inter, "Segoe UI", system-ui, Roboto, Helvetica, Arial, sans-serif`;
+}
+
+// Always-on animated SVG vector layer: a drifting particle field + a slowly
+// spinning dashed accent ring + two "drawing" accent lines. Every motion is a
+// GSAP tween (so it animates under deterministic frame-seek capture) with
+// FINITE repeats and lives on its own unique track. This is what guarantees a
+// fallback composition still carries inline vectors instead of being a bare
+// image slideshow. Returns { html, tweens }.
+function vectorVfxLayer({ width, height, duration, theme, trackIndex = 350, count = 12 }) {
+  const r2 = (n) => Math.round(n * 100) / 100;
+  const particleEls = [];
+  const tweens = [];
+  for (let i = 0; i < count; i++) {
+    const cx = Math.round(Math.random() * 100);
+    const cy = Math.round(Math.random() * 100);
+    const rad = 2 + Math.round(Math.random() * 5);
+    const o = (0.14 + Math.random() * 0.3).toFixed(2);
+    particleEls.push(`<circle class="vp vp${i}" cx="${cx}%" cy="${cy}%" r="${rad}" fill="${theme.particle}" opacity="${o}" />`);
+    const dy = -(24 + Math.round(Math.random() * 40));
+    const dx = (Math.random() - 0.5) * 18;
+    const dur = 6 + Math.random() * 7;
+    tweens.push(`  tl.to(".vp${i}", { attr: { cy: "+=${dy}%" }, x: "+=${r2(dx)}", duration: ${dur.toFixed(1)}, ease: "sine.inOut", yoyo: true, repeat: ${Math.max(0, Math.floor(duration / dur) - 1)} }, 0);`);
+  }
+
+  // Accent ring (dashed -> rotation makes the dashes orbit) + two lines that draw.
+  const ringR = Math.round(Math.min(width, height) * 0.22);
+  const cxPx = Math.round(width * 0.5), cyPx = Math.round(height * 0.5);
+  const lineLen = Math.round(width * 0.9);
+  const accentEls =
+    `<circle id="vfx-ring" cx="${cxPx}" cy="${cyPx}" r="${ringR}" fill="none" stroke="${theme.acc1}" stroke-width="2" opacity="0.12" stroke-dasharray="6 14" />` +
+    `<line id="vfx-line1" x1="0" y1="${Math.round(height * 0.3)}" x2="${lineLen}" y2="${Math.round(height * 0.3)}" stroke="${theme.acc1}" stroke-width="2" opacity="0.18" stroke-dasharray="${lineLen}" stroke-dashoffset="${lineLen}" />` +
+    `<line id="vfx-line2" x1="${width}" y1="${Math.round(height * 0.72)}" x2="${width - lineLen}" y2="${Math.round(height * 0.72)}" stroke="${theme.acc2}" stroke-width="2" opacity="0.18" stroke-dasharray="${lineLen}" stroke-dashoffset="${lineLen}" />`;
+
+  const spins = Math.max(1, Math.round(duration / 18));
+  tweens.push(`  tl.to("#vfx-ring", { rotation: 360, svgOrigin: "${cxPx} ${cyPx}", duration: ${r2(duration / spins)}, ease: "none", repeat: ${Math.max(0, spins - 1)} }, 0);`);
+  const lineDur = Math.min(2.2, Math.max(1.0, duration * 0.12));
+  const lineRep = Math.max(0, Math.floor(duration / (lineDur * 2)) - 1);
+  tweens.push(`  tl.fromTo("#vfx-line1", { strokeDashoffset: ${lineLen} }, { strokeDashoffset: 0, duration: ${r2(lineDur)}, ease: "power2.inOut", yoyo: true, repeat: ${lineRep} }, 0.4);`);
+  tweens.push(`  tl.fromTo("#vfx-line2", { strokeDashoffset: ${lineLen} }, { strokeDashoffset: 0, duration: ${r2(lineDur)}, ease: "power2.inOut", yoyo: true, repeat: ${lineRep} }, ${r2(0.4 + lineDur * 0.5)});`);
+
+  // Wrapper is a CLIP (full-duration, never opacity/transform-animated itself —
+  // only its SVG children move) so it never trips the clip-hidden-state lint.
+  // No z-index: DOM order places it above the image clips but below the title/
+  // caption layers that follow it.
+  const html =
+`    <div id="vfx-wrap" class="clip" data-start="0" data-duration="${duration}" data-track-index="${trackIndex}"
+         style="position:absolute; inset:0; pointer-events:none;">
+      <svg class="vfx" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid slice" style="position:absolute; inset:0; width:100%; height:100%;">
+        ${particleEls.join("")}${accentEls}
+      </svg>
+    </div>`;
+  return { html, tweens };
+}
+
+// ---------- Asset-aware fallback: Ken-Burns slideshow of the real assets ----------
+function buildAssetFallback({ prompt, duration, orientation, width, height, fps, storyboard, packTokens, assets, captionCues }) {
+  const theme = themeFromTokens(packTokens) || DEFAULT_THEME;
+  const isVertical = orientation === "vertical";
+  const fontStack = fontStackFor(theme);
+
+  const isLogo = (a) => /\b(logo|wordmark|brand)\b/i.test(a.alt || "");
+  // Vector/icon SVGs are decorative (often transparent, non-rectangular) — a
+  // full-bleed object-fit:cover Ken-Burns slide would stretch an icon across the
+  // whole frame. Keep them OUT of the photo slideshow; the always-on
+  // vectorVfxLayer below carries the vector cadence in this fallback.
+  const isVectorFile = (a) => /\.svg(\?|#|$)/i.test(a.path || "");
+  const arr = (assets || []).filter((a) => a && a.path);
+  const mains = arr.filter((a) => !isLogo(a) && !isVectorFile(a));
+  const logos = arr.filter(isLogo);
+  const ordered = [...mains, ...logos]; // logo(s) become the outro
+  const N = ordered.length;
+  // No photographic/logo material to slideshow (e.g. only SVGs were fetched):
+  // let the dispatcher fall through to the procedural look rather than divide by 0.
+  if (N === 0) throw new Error("no raster assets for slideshow fallback");
+
+  const slice = duration / N;
+  const XF = Math.max(0.3, Math.min(0.7, slice * 0.25)); // crossfade seconds
+  const r2 = (n) => Math.round(n * 100) / 100;
+
+  const clipEls = [];
+  const tl = [];
+
+  ordered.forEach((a, i) => {
+    const start = i === 0 ? 0 : r2(i * slice - XF);
+    const end = i === N - 1 ? duration : r2((i + 1) * slice);
+    const dur = r2(end - start);
+    const id = `a${i}`;
+    const track = i; // UNIQUE track per asset -> overlapping_clips_same_track impossible
+    const logo = isLogo(a);
+    const driftX = (i % 2 === 0) ? -3 : 3;
+    const driftY = (i % 2 === 0) ? 2 : -3;
+
+    if (a.type === "video") {
+      clipEls.push(
+        `    <video id="${id}" class="clip" src="${a.path}"
+         data-start="${start}" data-duration="${dur}" data-track-index="${track}"
+         muted playsinline autoplay loop
+         style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center; opacity:0;"></video>`
+      );
+      tl.push(`  tl.fromTo("#${id}", { scale: 1.0 }, { scale: 1.08, xPercent: ${driftX}, yPercent: ${driftY}, duration: ${dur}, ease: "sine.inOut" }, ${start});`);
+    } else if (logo) {
+      clipEls.push(
+        `    <div id="${id}" class="clip logo-stage"
+         data-start="${start}" data-duration="${dur}" data-track-index="${track}"
+         style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:${theme.bg1}; opacity:0;">
+      <img src="${a.path}" alt="${escapeHtml(a.alt || "logo")}" style="max-width:46%; max-height:46%; object-fit:contain;">
+    </div>`
+      );
+      tl.push(`  tl.fromTo("#${id} img", { scale: 0.82 }, { scale: 1, duration: 0.9, ease: "expo.out" }, ${r2(start + 0.1)});`);
+    } else {
+      clipEls.push(
+        `    <img id="${id}" class="clip" src="${a.path}" alt="${escapeHtml(a.alt || "")}"
+         data-start="${start}" data-duration="${dur}" data-track-index="${track}"
+         style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center; opacity:0;">`
+      );
+      tl.push(`  tl.fromTo("#${id}", { scale: 1.0 }, { scale: 1.12, xPercent: ${driftX}, yPercent: ${driftY}, duration: ${dur}, ease: "sine.inOut" }, ${start});`);
+    }
+
+    // Fade in (opacity is the ONLY hidden state we touch on a clip element).
+    tl.push(`  tl.fromTo("#${id}", { opacity: 0 }, { opacity: 1, duration: ${r2(XF)}, ease: "power1.out" }, ${start});`);
+    // Fade out + hard kill at the boundary (all but the last asset).
+    if (i < N - 1) {
+      tl.push(`  tl.to("#${id}", { opacity: 0, duration: ${r2(XF)}, ease: "power1.in" }, ${r2(end - XF)});`);
+      tl.push(`  tl.set("#${id}", { opacity: 0 }, ${end});`);
+    }
+  });
+
+  // --- Always-on animated vector layer (particles + accent ring + draw lines) ---
+  // Sits above the image/video clips and below the title/captions, so even this
+  // emergency composition ships with the inline-SVG vector cadence. Its track is
+  // offset above the asset clips (which use tracks 0..N-1) so it can never
+  // collide even if the upstream asset cap is ever raised.
+  const vfx = vectorVfxLayer({ width, height, duration, theme, trackIndex: N + 50 });
+  clipEls.push(vfx.html);
+  vfx.tweens.forEach((t) => tl.push(t));
+
+  // --- Title card on the first slice (centered, word-stagger) ---
+  const titleText = (storyboard?.title
+    || storyboard?.scenes?.[0]?.headline
+    || deriveScenes({ prompt, duration, storyboard })[0]?.headline
+    || "").toString().slice(0, 80);
+  const titleEnd = r2(Math.min(slice, duration));
+  if (titleText) {
+    clipEls.push(
+      `    <div id="title" class="clip title-wrap"
+         data-start="0.2" data-duration="${r2(titleEnd - 0.2)}" data-track-index="500"
+         style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; opacity:0;">
+      <div class="title-card">${wordSpans(titleText)}</div>
+    </div>`
+    );
+    tl.push(`  tl.set("#title", { opacity: 1 }, 0.2);`);
+    tl.push(`  tl.fromTo("#title .w", { yPercent: 70, opacity: 0, filter: "blur(8px)" }, { yPercent: 0, opacity: 1, filter: "blur(0px)", duration: 0.7, stagger: 0.06, ease: "power3.out" }, 0.3);`);
+    tl.push(`  tl.to("#title", { opacity: 0, duration: 0.4, ease: "power1.in" }, ${r2(titleEnd - 0.45)});`);
+    tl.push(`  tl.set("#title", { opacity: 0 }, ${titleEnd});`);
+  }
+
+  // --- Caption track (one full-duration container, children toggled by opacity) ---
+  const cues = Array.isArray(captionCues) ? captionCues.filter((c) => c && c.text) : [];
+  if (cues.length) {
+    const capEls = cues.map((c, j) =>
+      `      <div class="cap" id="cap${j}" style="opacity:0;">${escapeHtml(String(c.text))}</div>`
+    ).join("\n");
+    clipEls.push(
+      `    <div id="captions" class="clip"
+         data-start="0" data-duration="${duration}" data-track-index="900"
+         style="position:absolute; inset:0; pointer-events:none;">
+${capEls}
+    </div>`
+    );
+    cues.forEach((c, j) => {
+      const s = r2(Math.max(0, Number(c.start) || 0));
+      const e = r2(Math.min(duration, Number(c.end) || (s + 2)));
+      if (e <= s) return;
+      tl.push(`  tl.set("#cap${j}", { opacity: 1 }, ${s});`);
+      tl.push(`  tl.set("#cap${j}", { opacity: 0 }, ${e});`);
+    });
+  }
+
+  const titlePx = isVertical ? 92 : 84;
+  const capPx = isVertical ? 46 : 40;
+  const metaJson = JSON.stringify({ compositionId: "vid", width, height, fps, duration });
+
+  const indexHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Composition</title>
+<style>
+  html, body { margin: 0; padding: 0; background: ${theme.bg1}; }
+  #root {
+    position: relative;
+    width: ${width}px; height: ${height}px;
+    overflow: hidden;
+    font-family: ${fontStack};
+    color: ${theme.ink};
+    isolation: isolate;
+  }
+  .title-wrap { padding: ${isVertical ? "16%" : "8%"}; box-sizing: border-box; }
+  .title-card {
+    text-align: center;
+    font-size: ${titlePx}px; font-weight: 800; line-height: 1.06; letter-spacing: -0.02em;
+    max-width: 88%;
+    color: ${theme.ink};
+    text-shadow: 0 6px 28px rgba(0,0,0,0.55);
+  }
+  .title-card .w { display: inline-block; }
+  .cap {
+    position: absolute;
+    left: 50%; bottom: 6%;
+    transform: translateX(-50%);
+    max-width: 86%;
+    text-align: center;
+    font-size: ${capPx}px; font-weight: 600; line-height: 1.3;
+    color: #ffffff;
+    background: linear-gradient(180deg, rgba(0,0,0,0.0), rgba(0,0,0,0.55));
+    padding: 0.4em 0.9em; border-radius: 12px;
+    text-shadow: 0 2px 10px rgba(0,0,0,0.7);
+  }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+</head>
+<body>
+  <div id="root" class="composition"
+       data-composition-id="vid"
+       data-width="${width}" data-height="${height}"
+       data-start="0" data-duration="${duration}">
+
+${clipEls.join("\n")}
+
+  </div>
+<script>
+(function(){
+  const tl = gsap.timeline({ paused: true, defaults: { ease: "power2.out" } });
+
+${tl.join("\n")}
+
+  window.__timelines = window.__timelines || {};
+  window.__timelines["vid"] = tl;
+})();
+</script>
+</body>
+</html>`;
+
+  return { indexHtml, metaJson };
+}
+
+// ---------- Procedural fallback (no assets): gradient + particles + text ----------
+function buildProceduralFallback({ prompt, duration, orientation, width, height, fps, storyboard, packTokens }) {
   const scenes = deriveScenes({ prompt, duration, storyboard });
   const theme = themeFromTokens(packTokens) || DEFAULT_THEME;
 
@@ -162,6 +427,7 @@ function buildFallback({ prompt, duration, orientation, width, height, fps = 30,
     }
     if (i < scenes.length - 1) {
       pieces.push(`tl.to("#s${i}", { opacity: 0, duration: 0.6, ease: "power1.in" }, ${fadeOutAt});`);
+      pieces.push(`tl.set("#s${i}", { opacity: 0 }, ${Math.round((s.start + s.duration) * 100) / 100});`);
     }
     return pieces.join("\n    ");
   }).join("\n    ");
@@ -172,7 +438,7 @@ function buildFallback({ prompt, duration, orientation, width, height, fps = 30,
     const dy = -(30 + Math.round(Math.random() * 40));
     const dx = (Math.random() - 0.5) * 20;
     const dur = 6 + Math.random() * 8;
-    particleAnims.push(`tl.to(".p${i}", { attr: { cy: "+=${dy}%" }, x: "+=${dx}", duration: ${dur.toFixed(1)}, ease: "sine.inOut", yoyo: true, repeat: -1 }, 0);`);
+    particleAnims.push(`tl.to(".p${i}", { attr: { cy: "+=${dy}%" }, x: "+=${dx}", duration: ${dur.toFixed(1)}, ease: "sine.inOut", yoyo: true, repeat: ${Math.max(0, Math.floor(duration / dur) - 1)} }, 0);`);
   }
 
   const indexHtml = `<!DOCTYPE html>
@@ -186,7 +452,7 @@ function buildFallback({ prompt, duration, orientation, width, height, fps = 30,
     position: relative;
     width: ${width}px; height: ${height}px;
     overflow: hidden;
-    font-family: ${theme.fonts ? theme.fonts + ", " : ""}Inter, Roboto, system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-family: ${fontStackFor(theme)};
     color: ${theme.ink};
     isolation: isolate;
   }
@@ -319,4 +585,17 @@ ${clipDivs}
   return { indexHtml, metaJson };
 }
 
-module.exports = { buildFallback };
+// Dispatcher: use the real assets when we have them, else the procedural look.
+function buildFallback(opts) {
+  const assets = (opts.assets || []).filter((a) => a && a.path);
+  if (assets.length) {
+    try {
+      return buildAssetFallback({ ...opts, assets });
+    } catch (e) {
+      console.warn(`[fallback] asset slideshow build failed (${e.message}); using procedural fallback`);
+    }
+  }
+  return buildProceduralFallback(opts);
+}
+
+module.exports = { buildFallback, buildAssetFallback, buildProceduralFallback };

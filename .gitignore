@@ -31,3 +31,13 @@ server/asset_cache/
 # OS noise
 Thumbs.db
 .DS_Store
+
+# Local curated asset library (large, not versioned)
+server/asset_library/
+server/_review/
+
+# stray screenshots / runtime logs / large showcase binaries
+image.png
+**/image.png
+*.run.log
+server/public/showcase.mp4

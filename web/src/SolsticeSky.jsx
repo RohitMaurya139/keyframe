@@ -16,6 +16,12 @@ import { useEffect, useMemo, useRef } from "react";
    It also toggles `solstice-night` on <html> past phase 0.82
    so the index.css token flip kicks in (light text at night).
 
+   PERFORMANCE: every per-frame mutation is compositor-only
+   (opacity / transform). The sky is six stacked static gradient
+   layers cross-faded by opacity; the sun glow is two static
+   blurred layers cross-faded by opacity — NO box-shadow or
+   full-viewport gradient is repainted per frame.
+
    Mount once, first child of your root:
      <SolsticeSky phase={PHASES[view]} />
    ============================================================ */
@@ -54,9 +60,11 @@ function sample(stops, p, key) {
 }
 
 export default function SolsticeSky({ phase = null }) {
-  const skyRef = useRef(null);
+  const skyLayerRefs = useRef([]);
   const sunWrapRef = useRef(null);
   const sunRef = useRef(null);
+  const glowWarmRef = useRef(null);
+  const glowCoolRef = useRef(null);
   const moonShadowRef = useRef(null);
   const cratersRef = useRef(null);
   const raysRef = useRef(null);
@@ -76,26 +84,47 @@ export default function SolsticeSky({ phase = null }) {
     []
   );
 
+  // One static gradient per sky stop; cross-faded by opacity at runtime.
+  const skyLayers = useMemo(
+    () => SKY_STOPS.map((s) => `linear-gradient(${s.top}, ${s.bottom})`),
+    []
+  );
+
   useEffect(() => {
     let raf;
     const apply = (p) => {
       const night = clamp01((p - 0.7) / 0.3);
-      const topC = sample(SKY_STOPS, p, "top");
-      const botC = sample(SKY_STOPS, p, "bottom");
-      if (skyRef.current) skyRef.current.style.background = `linear-gradient(${topC}, ${botC})`;
+
+      // --- Sky: cross-fade stacked static gradients (opacity only, no repaint).
+      let i = 0;
+      while (i < SKY_STOPS.length - 2 && p > SKY_STOPS[i + 1].p) i++;
+      const a = SKY_STOPS[i], b = SKY_STOPS[i + 1];
+      const t = clamp01((p - a.p) / (b.p - a.p));
+      const layers = skyLayerRefs.current;
+      for (let k = 0; k < layers.length; k++) {
+        const el = layers[k];
+        if (!el) continue;
+        // layers <= i are fully opaque (the topmost opaque one wins); the next
+        // layer fades in on top by `t`; everything above is hidden.
+        el.style.opacity = k <= i ? "1" : k === i + 1 ? t.toFixed(3) : "0";
+      }
+
+      // --- Sun position (GPU transform).
       if (sunWrapRef.current) {
         const w = window.innerWidth, h = window.innerHeight;
         const x = 0.06 * w + p * 0.78 * w;
         const y = h * (0.12 + 0.42 * (1 - Math.sin(p * Math.PI * 0.9)));
-        sunWrapRef.current.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
+        sunWrapRef.current.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`;
       }
-      if (sunRef.current) {
-        sunRef.current.style.background = sample(SUN_STOPS, p, "c");
-        sunRef.current.style.boxShadow = `0 0 80px 30px rgba(255,170,60,${(0.5 * (1 - night)).toFixed(3)}), 0 0 70px 22px rgba(190,205,255,${(0.4 * night).toFixed(3)})`;
-      }
+      // Sun core colour (tiny 118px repaint).
+      if (sunRef.current) sunRef.current.style.background = sample(SUN_STOPS, p, "c");
+      // Glow: cross-fade two static blurred layers by opacity (replaces box-shadow).
+      if (glowWarmRef.current) glowWarmRef.current.style.opacity = (1 - night).toFixed(3);
+      if (glowCoolRef.current) glowCoolRef.current.style.opacity = night.toFixed(3);
+
       if (moonShadowRef.current) {
         moonShadowRef.current.style.transform = `translateX(${(night <= 0 ? 110 : 110 - 72 * night).toFixed(1)}%)`;
-        moonShadowRef.current.style.background = topC;
+        moonShadowRef.current.style.background = sample(SKY_STOPS, p, "top");
       }
       if (cratersRef.current) cratersRef.current.style.opacity = night.toFixed(2);
       if (raysRef.current) raysRef.current.style.opacity = (1 - night).toFixed(2);
@@ -112,8 +141,11 @@ export default function SolsticeSky({ phase = null }) {
     const tick = () => {
       target.current = phase === null ? fromScroll() : clamp01(phase);
       const d = target.current - current.current;
-      if (Math.abs(d) > 0.0005) {
-        current.current += d * 0.07; // ease toward target
+      if (Math.abs(d) > 0.0008) {
+        current.current += d * 0.15; // snappier ease — was 0.07 (felt delayed)
+        apply(current.current);
+      } else if (current.current !== target.current) {
+        current.current = target.current; // snap + one exact final frame
         apply(current.current);
       }
       raf = requestAnimationFrame(tick);
@@ -121,23 +153,33 @@ export default function SolsticeSky({ phase = null }) {
     apply(current.current);
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [phase]);
+  }, [phase, skyLayers]);
 
   return (
-    <div ref={skyRef} aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: -1, background: "linear-gradient(#FFE9C7, #FFD9C2)", overflow: "hidden" }}>
+    <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: -1, overflow: "hidden", background: "linear-gradient(#FFE9C7, #FFD9C2)" }}>
+      {skyLayers.map((g, k) => (
+        <div
+          key={k}
+          ref={(el) => (skyLayerRefs.current[k] = el)}
+          style={{ position: "absolute", inset: 0, background: g, opacity: k === 0 ? 1 : 0, willChange: "opacity" }}
+        />
+      ))}
       <div ref={cloudsRef} style={{ position: "absolute", inset: 0 }}>
-        <div style={{ position: "absolute", top: "16vh", left: "12vw", width: 320, height: 84, borderRadius: 999, background: "rgba(255,255,255,.75)", filter: "blur(22px)", animation: "cloudDrift 46s ease-in-out infinite alternate" }} />
-        <div style={{ position: "absolute", top: "34vh", right: "8vw", width: 420, height: 100, borderRadius: 999, background: "rgba(255,255,255,.6)", filter: "blur(28px)", animation: "cloudDrift 64s ease-in-out infinite alternate-reverse" }} />
-        <div style={{ position: "absolute", top: "7vh", right: "30vw", width: 240, height: 64, borderRadius: 999, background: "rgba(255,255,255,.55)", filter: "blur(18px)", animation: "cloudDrift 54s ease-in-out infinite alternate" }} />
+        <div style={{ position: "absolute", top: "16vh", left: "12vw", width: 320, height: 84, borderRadius: 999, background: "rgba(255,255,255,.75)", filter: "blur(22px)", willChange: "transform", animation: "cloudDrift 46s ease-in-out infinite alternate" }} />
+        <div style={{ position: "absolute", top: "34vh", right: "8vw", width: 420, height: 100, borderRadius: 999, background: "rgba(255,255,255,.6)", filter: "blur(28px)", willChange: "transform", animation: "cloudDrift 64s ease-in-out infinite alternate-reverse" }} />
+        <div style={{ position: "absolute", top: "7vh", right: "30vw", width: 240, height: 64, borderRadius: 999, background: "rgba(255,255,255,.55)", filter: "blur(18px)", willChange: "transform", animation: "cloudDrift 54s ease-in-out infinite alternate" }} />
       </div>
       <div ref={starsRef} style={{ position: "absolute", inset: 0, opacity: 0 }}>
         {stars.map((s, i) => (
           <i key={i} style={{ position: "absolute", left: s.left, top: s.top, width: s.size, height: s.size, borderRadius: "50%", background: "#E7ECFA", animation: s.anim }} />
         ))}
       </div>
-      <div ref={sunWrapRef} style={{ position: "absolute", left: 0, top: 0, width: 118, height: 118, willChange: "transform", transform: "translate(8vw, 54vh)" }}>
+      <div ref={sunWrapRef} style={{ position: "absolute", left: 0, top: 0, width: 118, height: 118, willChange: "transform", transform: "translate3d(8vw, 54vh, 0)" }}>
+        {/* glow layers — cross-faded by opacity instead of an animated box-shadow */}
+        <div ref={glowWarmRef} style={{ position: "absolute", inset: -74, borderRadius: "50%", background: "radial-gradient(circle, rgba(255,170,60,.55), rgba(255,170,60,0) 68%)", filter: "blur(6px)", willChange: "opacity", pointerEvents: "none" }} />
+        <div ref={glowCoolRef} style={{ position: "absolute", inset: -64, borderRadius: "50%", background: "radial-gradient(circle, rgba(190,205,255,.5), rgba(190,205,255,0) 68%)", filter: "blur(6px)", opacity: 0, willChange: "opacity", pointerEvents: "none" }} />
         <div ref={raysRef} style={{ position: "absolute", inset: -26, borderRadius: "50%", border: "2px dashed rgba(255,170,60,.55)", animation: "raysSpin 40s linear infinite" }} />
-        <div ref={sunRef} style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "#FFD66B", boxShadow: "0 0 80px 30px rgba(255,170,60,.5)", overflow: "hidden" }}>
+        <div ref={sunRef} style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "#FFD66B", overflow: "hidden" }}>
           <div ref={moonShadowRef} style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "#FFE9C7", transform: "translateX(110%)" }} />
           <div ref={cratersRef} style={{ position: "absolute", inset: 0, opacity: 0 }}>
             <i style={{ position: "absolute", left: "22%", top: "30%", width: 18, height: 18, borderRadius: "50%", background: "rgba(150,165,200,.35)" }} />

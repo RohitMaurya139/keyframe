@@ -149,6 +149,8 @@ are interchangeable with **no semantic meaning** — pair by juxtaposition (pink
 cream+yellow warm pair). `{colors.yellow}` is the CTA + the one colored (close) shadow;
 `{colors.black}` ground is the close surface. **No sixth pastel.**
 
+**Text color law:** all type is `{colors.black}` on pastel/white grounds (and `{colors.white}` only on the `{colors.black}` close-frame) — pastels are fills/grounds, never text. Any text over an image sits in a white `card-elevated` or on a flat pastel/black block (black-on-light or white-on-black), never raw on a busy image.
+
 ## Typography
 
 Two ramps. The **reading/chrome ramp** (Inter body 0.95cqw weight 500, Space Grotesk labels in px)

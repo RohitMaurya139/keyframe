@@ -36,11 +36,21 @@ const VERDICT_INSTRUCTIONS = `You are the quality-assurance director reviewing r
 {
   "pass": true|false,
   "score": <0-10>,
-  "issues": [{ "atSec": <number>, "severity": "blocker|minor", "issue": "<what is wrong>", "fix": "<concrete instruction for the composer>" }]
+  "issues": [{ "atSec": <number>, "severity": "blocker|minor", "issue": "<what is wrong>", "fix": "<a CONCRETE instruction for the composer: which element, what to change, where>" }]
 }
-BLOCKER issues (any one fails the video): a frame that is empty or near-empty (only background visible, no content); text cut off mid-word or overflowing its container; text unreadable against its background; an image stretched/distorted or covering text; content obviously offscreen (partial edges of a card at the frame border with nothing else).
-MINOR issues (report, do not fail): cramped spacing, weak hierarchy, a transition caught mid-motion, slight caption overlap.
-A frame caught mid-transition with PARTIAL content is NORMAL — only flag emptiness if a frame shows background only. Be strict about blockers, lenient about style.`;
+
+BLOCKER issues (any ONE fails the video — be strict, this is a premium motion-graphics product):
+1. EMPTY / NEAR-EMPTY FRAME: only a background or solid color is visible, with no real content.
+2. UNDER-ILLUSTRATED FRAME: the frame shows essentially just text (a headline/body) on a flat or near-flat background, with NO supporting imagery, vectors, shapes, particles, or decorative layers. Premium video keeps multiple distinct visual layers on screen — a frame must show AT LEAST 2–3 distinct non-text visual elements (a photo, plus SVG accents / particles / shapes / icons). A text-only or text-plus-one-static-gradient frame is a BLOCKER. In the "fix", tell the composer to add specific animated vector/asset layers (e.g. "add a drifting particle field + a drawing underline + an inset image at 8–10s").
+3. TEXT CONTRAST FAILURE: any text you cannot read instantly and comfortably at thumbnail size — light text on a light ground, dark text on a dark ground, text in an accent hue that blends into the background, or text laid over a busy image/gradient without a solid contrast device behind it. Treat WCAG AA (~4.5:1) as the floor; if contrast looks even borderline, FAIL it and tell the composer the exact fix (swap text to the lightest/darkest token, or add a solid panel/scrim behind it).
+4. TEXT OVERFLOW: text cut off mid-word, overflowing its container, or clipped at the frame edge.
+5. IMAGE DISTORTION: an image stretched/squashed (missing object-fit: cover) or covering critical text.
+6. CONTENT OFFSCREEN: a card/element half off the frame edge with nothing else visible (layout error).
+7. ELEMENT COLLISION: two or more CONTENT blocks (cards, stat tiles, labels, headlines, icon groups, image insets) overlapping or stacked on top of one another in SPACE when they should sit side-by-side or stacked-with-a-gap — e.g. text running through another text block, a stat tile covering a label, two cards occupying the same region. (This does NOT apply to deliberate layered effects like a glow/scrim/shadow behind text.) In the "fix", NAME which elements collide and tell the composer to lay them out in a flex/grid container with an explicit gap, or move/scale one element so they no longer overlap.
+
+MINOR issues (report, do NOT fail): cramped spacing, weak hierarchy, a transition caught mid-motion, a single thin scene in an otherwise rich video. (A caption that very slightly touches a content edge is minor; two CONTENT blocks overlapping is a BLOCKER per #7, not minor.)
+
+A frame caught mid-transition with PARTIAL content is NORMAL — do not fail it for that alone. Be strict about the blockers above (especially under-illustration and contrast), lenient about pure style.`;
 
 async function reviewRender({ videoPath, scenes, duration, framePack, frameMd, workDir, tracker, signal }) {
   fs.mkdirSync(workDir, { recursive: true });

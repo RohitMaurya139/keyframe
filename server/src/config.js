@@ -5,6 +5,27 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const CONFIG_PATH = path.resolve(__dirname, "..", "config.json");
+const ENV_PATH = path.resolve(__dirname, "..", ".env");
+
+// Load server/.env into process.env BEFORE anything reads keys, so API keys can
+// be rotated by editing one gitignored file (no config.json edits, no shell
+// exports). Real shell env always wins — loadEnvFile only fills what's unset is
+// NOT guaranteed by Node, so we load first and let explicit exports override by
+// reapplying them afterwards. Node 20.12+/22 ships process.loadEnvFile natively.
+(function loadDotEnv() {
+  if (!fs.existsSync(ENV_PATH)) return;
+  // Preserve any keys already exported in the real shell — those take priority.
+  const preset = { ...process.env };
+  try {
+    process.loadEnvFile(ENV_PATH);
+  } catch (e) {
+    console.warn(`[config] could not load ${ENV_PATH}: ${e.message}`);
+    return;
+  }
+  for (const k of Object.keys(preset)) {
+    if (preset[k] !== undefined && preset[k] !== "") process.env[k] = preset[k];
+  }
+})();
 
 function loadRaw() {
   if (!fs.existsSync(CONFIG_PATH)) {
@@ -74,6 +95,27 @@ function build() {
   }
   if (process.env.KIE_API_KEY && cfg.llm.primary) {
     cfg.llm.primary.apiKey = process.env.KIE_API_KEY;
+  }
+  // Stock-media keys. PIXABAY_API_KEY feeds both the modern provider path
+  // (assetProviders.pixabay) and the legacy audio.pixabayKey fallback.
+  if (process.env.PIXABAY_API_KEY) {
+    cfg.assetProviders = cfg.assetProviders || {};
+    cfg.assetProviders.pixabay = cfg.assetProviders.pixabay || {};
+    cfg.assetProviders.pixabay.apiKey = process.env.PIXABAY_API_KEY;
+    cfg.audio = cfg.audio || {};
+    cfg.audio.pixabayKey = process.env.PIXABAY_API_KEY;
+  }
+  if (process.env.FREESOUND_TOKEN) {
+    cfg.audio = cfg.audio || {};
+    cfg.audio.freesoundToken = process.env.FREESOUND_TOKEN;
+  }
+  // MEDIA_PROVIDER: promote the named stock provider to the front of the search
+  // order. Accepts the provider id or its "-api"/"_api"-suffixed alias.
+  if (process.env.MEDIA_PROVIDER && cfg.assetProviders && Array.isArray(cfg.assetProviders.order)) {
+    const want = process.env.MEDIA_PROVIDER.replace(/[-_]api$/, "");
+    if (cfg.assetProviders.order.includes(want)) {
+      cfg.assetProviders.order = [want, ...cfg.assetProviders.order.filter((p) => p !== want)];
+    }
   }
 
   // Port override (EB sets PORT env).

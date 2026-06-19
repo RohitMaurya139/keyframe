@@ -30,6 +30,7 @@ const { fetchMusic } = require("../services/audio_sources");
 const { getSfx } = require("../services/sfx_library");
 const { VALID_VOICES } = require("../services/audio_planner");
 const { buildFallback } = require("../services/fallback");
+const { normalizeComposition } = require("../services/normalize");
 const { render } = require("../services/renderer");
 const { reviewRender } = require("./qa_agent");
 
@@ -54,10 +55,28 @@ function storyboardPromptFromScript(script, brief) {
   return lines.join("\n");
 }
 
+// The voices the gpt-audio TTS family actually renders (tts.js AUDIO_VOICES).
+// pickVoice MUST resolve to one of these — emitting a tts-1-era voice
+// (fable/nova/onyx) would be silently downgraded to marin by tts.mapVoice().
+const AUDIO_VOICES = new Set(["alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse", "marin", "cedar"]);
+
 function pickVoice(job, script) {
-  const want = (job.voice_style || script?.voice?.style || "").toLowerCase();
-  for (const v of VALID_VOICES) if (want.includes(v)) return v;
-  return "marin";
+  // 1) An explicit, exact voice name wins.
+  const explicit = String(job.voice_style || "").trim().toLowerCase();
+  if (AUDIO_VOICES.has(explicit)) return explicit;
+
+  // 2) Map gender/tone cues from the script's voice style to a real voice
+  //    (the old code substring-matched the wrong tts-1 set and always fell to
+  //    marin — no gender fit, no variety).
+  const want = `${job.voice_style || ""} ${script?.voice?.style || ""} ${script?.voice?.pace || ""}`.toLowerCase();
+  const has = (...ks) => ks.some((k) => want.includes(k));
+  if (has("female", "woman", "feminine", "she/her", "she ")) return has("warm", "soft", "calm", "gentle") ? "sage" : "coral";
+  if (has("male", "man", "masculine", "he/him", "he ")) return has("deep", "authoritative", "bold", "gravitas") ? "cedar" : "ash";
+  if (has("energetic", "upbeat", "excited", "punchy", "hype", "playful")) return "ballad";
+  if (has("warm", "calm", "soothing", "gentle", "reassuring")) return "sage";
+  if (has("elegant", "sophisticated", "premium", "refined", "luxury")) return "verse";
+  if (has("bright", "friendly", "cheerful", "approachable")) return "shimmer";
+  return "marin"; // a natural, neutral default
 }
 
 // ---------------------------------------------------------------- agents
@@ -119,13 +138,31 @@ async function assetPlannerAgent(s) {
     return picked.length >= 2 ? picked.join(" ") : null;
   };
 
+  const VECTOR_ROLES = new Set(["icon", "texture", "vector"]);
+  const roleOf = (n) => String(n.role || "").toLowerCase();
+
   const wants = [];
   for (const scene of script.scenes) {
     const needs = [...(scene.assetNeeds || [])];
-    // Gap-fill: substance scenes with no asset request get a derived one.
-    if (!needs.length && !pinnedSceneIds.has(scene.id) && !["hook", "cta"].includes(scene.purpose)) {
+    // Gap-fill: EVERY scene with no asset request gets a derived one (hook/cta
+    // included — dense visuals everywhere beats sparse pure-typography beats).
+    if (!needs.length && !pinnedSceneIds.has(scene.id)) {
       const q = deriveQuery(scene);
-      if (q) needs.push({ type: "image", query: q, role: "background", derived: true });
+      if (q) {
+        needs.push({ type: "image", query: q, role: "background", derived: true });
+        // Alternate scenes also pull a photo inset for variety.
+        if (script.scenes.indexOf(scene) % 2 === 1) {
+          needs.push({ type: "image", query: q, role: "inset", derived: true });
+        }
+      }
+    }
+    // VECTOR GAP-FILL — the curated 2k+ SVG library was effectively never tapped
+    // because nothing ever requested an icon/vector role. Guarantee EVERY scene
+    // pulls one on-brand vector/icon so the composer always has real graphic
+    // material to layer (not just photos), satisfying the vector cadence mandate.
+    if (!needs.some((n) => VECTOR_ROLES.has(roleOf(n)))) {
+      const q = deriveQuery(scene) || (scene.assetNeeds && scene.assetNeeds[0] && scene.assetNeeds[0].query) || null;
+      if (q) needs.push({ type: "image", query: q, role: "icon", derived: true });
     }
     for (const need of needs) {
       if (pinnedSceneIds.has(scene.id) && need.role === "background") continue;
@@ -133,10 +170,13 @@ async function assetPlannerAgent(s) {
       wants.push({ kind: "search", scene, need: { ...need, type } });
     }
   }
-  const videos = wants.filter((w) => w.need.type === "video").slice(0, 1);
-  const images = wants.filter((w) => w.need.type !== "video").slice(0, 9 - videos.length);
-  console.log(`[agents] asset_planner: ${screenshotPlan.length} screenshot(s) + ${videos.length + images.length} search want(s) (${wants.filter((w) => w.need.derived).length} derived)`);
-  return { assetPlan: { screenshots: screenshotPlan, searches: [...videos, ...images] } };
+  const videos = wants.filter((w) => w.need.type === "video").slice(0, 2);
+  // Vectors get their OWN budget so a long photo list can't starve them — this
+  // is what finally feeds the curated SVG library into films.
+  const vectors = wants.filter((w) => w.need.type !== "video" && VECTOR_ROLES.has(roleOf(w.need))).slice(0, 8);
+  const photos  = wants.filter((w) => w.need.type !== "video" && !VECTOR_ROLES.has(roleOf(w.need))).slice(0, 12 - videos.length);
+  console.log(`[agents] asset_planner: ${screenshotPlan.length} screenshot(s) + ${videos.length} video(s) + ${photos.length} photo(s) + ${vectors.length} vector(s) (${wants.filter((w) => w.need.derived).length} derived)`);
+  return { assetPlan: { screenshots: screenshotPlan, searches: [...videos, ...photos, ...vectors] } };
 }
 
 // Asset Search — executes the plan: our database first, then providers.
@@ -157,21 +197,43 @@ async function assetSearchAgent(s) {
     };
   });
 
+  // Map a scene's asset role to the kind of curated asset that fits it:
+  // full-bleed backgrounds want real photos; insets/icons/textures want
+  // vectors or illustrations. Threaded into acquire() -> curated.search.
+  const kindPrefFor = (role) => {
+    const r = String(role || "").toLowerCase();
+    if (r === "background" || r === "fullscreen") return "photo";
+    if (r === "icon" || r === "texture") return "vector";
+    if (r === "inset") return "illustration";
+    return undefined;
+  };
+
+  // Sequential so each curated pick can exclude the library files already
+  // chosen for earlier scenes — no single film reuses the same file twice.
+  const usedLibraryIds = new Set();
   let iImg = 0, iVid = 0;
-  const got = (await Promise.all(assetPlan.searches.map(({ scene, need }) => {
+  const results = [];
+  for (const { scene, need } of assetPlan.searches) {
     const isVideo = need.type === "video";
     const relPath = isVideo ? `assets/videos/${iVid++}.mp4` : `assets/images/${iImg++}.jpg`;
-    const query = need.type === "icon" ? `${need.query} icon flat` : need.query;
-    return acquire({
+    const isIcon = String(need.role || "").toLowerCase() === "icon";
+    const query = isIcon ? `${need.query} icon flat` : need.query;
+    const r = await acquire({
       query, fallbackQueries: fallbackQueriesFor(query), type: isVideo ? "video" : "image",
       orientation: job.orientation, outputPath: path.join(jobDir, relPath), tracker,
-    }).then((r) => r ? {
-      path: relPath, type: isVideo ? "video" : "image",
+      kindPref: isVideo ? undefined : kindPrefFor(need.role),
+      excludeIds: usedLibraryIds,
+    }).catch(() => null);
+    if (!r) continue;
+    if (r.libraryId) usedLibraryIds.add(r.libraryId);
+    results.push({
+      path: path.relative(jobDir, r.path).split(path.sep).join("/"), type: isVideo ? "video" : "image",
       sceneId: scene.id, startSec: scene.start, durationSec: scene.duration,
       style: need.role === "inset" ? "inset" : "background", alt: need.query,
       license: r.license, sourceUrl: r.sourceUrl, source: r.source, fromCache: r.fromCache === true,
-    } : null).catch(() => null);
-  }))).filter(Boolean);
+    });
+  }
+  const got = results;
 
   const assets = [...pinned, ...got];
   db.setAssets(job.id, assets);
@@ -185,7 +247,17 @@ async function voiceAgent(s) {
   const audioDir = path.join(jobDir, "audio");
   fs.mkdirSync(audioDir, { recursive: true });
   const voice = pickVoice(job, script);
-  const instructions = `${script.voice.style}. Pace: ${script.voice.pace}.`;
+  // Delivery DIRECTION, not a demographic profile. Strip gender/age words (they
+  // pick the voice, not the read) and turn pace into a spoken-energy phrase so
+  // gpt-audio gets actionable acting notes instead of "30s female".
+  const tone = String(script.voice?.style || "")
+    .replace(/\b(male|female|man|woman|masculine|feminine|young|younger|older|aged?|teen|adult|nonbinary|he\/him|she\/her|\d+\s*s?)\b/gi, "")
+    .replace(/\s{2,}/g, " ").replace(/^[\s,.;-]+|[\s,.;-]+$/g, "").trim() || "clear and confident";
+  const pace = String(script.voice?.pace || "").toLowerCase();
+  const paceEnergy = /slow|calm|measured|gentle/.test(pace) ? "unhurried and measured"
+    : /fast|brisk|quick|punchy|energetic/.test(pace) ? "brisk and energetic"
+    : "a relaxed, natural conversational rhythm";
+  const instructions = `Speak ${tone}. Delivery: ${paceEnergy}. Vary intonation naturally, land emphasis on key words, and warm the final line.`;
 
   const voTask = Promise.all(script.scenes.map((sc) =>
     (sc.voiceover && sc.voiceover.trim())
@@ -202,8 +274,12 @@ async function voiceAgent(s) {
       .then((p) => p ? { path: p, startSec: x.startSec, volume: 0.4 } : null).catch(() => null)
   )).then((a) => a.filter(Boolean));
 
-  const musicTask = script.music?.query
-    ? fetchMusic({ query: script.music.query, outputPath: path.join(audioDir, "music.mp3"), tracker }).catch(() => null)
+  // Richer music query: fold the mood field into the query so the provider gets
+  // genre/feel cues, not just a bare 2-word phrase (which returned off-genre SFX).
+  const musicQuery = [script.music?.mood, script.music?.query]
+    .map((x) => String(x || "").trim()).filter(Boolean).join(" ").slice(0, 80);
+  const musicTask = (script.music?.query || script.music?.mood)
+    ? fetchMusic({ query: musicQuery, outputPath: path.join(audioDir, "music.mp3"), tracker }).catch(() => null)
     : Promise.resolve(null);
 
   const [voClips, sfxClips, musicPath] = await Promise.all([voTask, sfxTask, musicTask]);
@@ -244,7 +320,16 @@ async function compositionAgent(s) {
     );
     return { visual, usedFallback: false, finalAttempt: s.qa ? "qa-repair" : "main" };
   } catch (e) {
-    console.warn(`[agents] composition failed (${e.message.slice(0, 180)}); deterministic fallback`);
+    console.warn(`[agents] composition failed (${e.message.slice(0, 180)})`);
+    // On a QA-triggered repair lap, a failed re-compose must NOT discard the
+    // prior render that already passed lint and was QA-reviewed by shipping the
+    // bland deterministic template. A real (if imperfect) composition beats a
+    // fallback slide — keep the previous good render.
+    if (s.qa && s.visual && !s.usedFallback) {
+      console.warn(`[agents] repair re-compose failed — keeping prior lint-passing render (not falling back to template)`);
+      return { visual: s.visual, usedFallback: false, finalAttempt: s.finalAttempt || "main", rendered: true };
+    }
+    console.warn(`[agents] deterministic fallback`);
     try {
       if (fs.existsSync(path.join(jobDir, "index.html"))) {
         fs.copyFileSync(path.join(jobDir, "index.html"), path.join(jobDir, "index.llm-attempt.html"));
@@ -255,8 +340,13 @@ async function compositionAgent(s) {
       orientation: job.orientation, width: dims.width, height: dims.height, fps: dims.fps,
       storyboard: s.storyboard,
       packTokens: s.framePack ? frameRegistry.getPackTokens(s.framePack) : null,
+      assets: s.assets || [],
+      captionCues,
     });
-    fs.writeFileSync(path.join(jobDir, "index.html"), fb.indexHtml, "utf8");
+    // Run the fallback through the same safe normalizer the LLM path uses, so a
+    // pack font token / track overlap never ships an un-checked fallback.
+    const fbNorm = normalizeComposition(fb.indexHtml);
+    fs.writeFileSync(path.join(jobDir, "index.html"), fbNorm.html, "utf8");
     fs.writeFileSync(path.join(jobDir, "meta.json"), fb.metaJson, "utf8");
     tracker.addExternal("hyperframes_render");
     const visual = await render({ jobId: job.id, jobDir, durationSec: job.duration });
@@ -307,7 +397,8 @@ async function timelineAgent(s) {
       ttsPath: null,
       musicPath: s.musicPath || null,
       sfx: [
-        ...(s.voClips || []).map((c) => ({ path: c.path, startSec: c.startSec, volume: 1.0 })),
+        // kind:"vo" lets the mixer duck the background music under speech.
+        ...(s.voClips || []).map((c) => ({ path: c.path, startSec: c.startSec, volume: 1.0, kind: "vo" })),
         ...(s.sfxClips || []),
       ],
       musicVolume: config.audio?.defaultMusicVolume ?? 0.15,

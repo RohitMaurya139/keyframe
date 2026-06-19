@@ -40,7 +40,9 @@ async function search({ query, type, orientation, limit = 5 }) {
       per_page: limit, safesearch: "true",
     });
     return (data.hits || []).map((h) => ({
-      url: h.largeImageURL || h.webformatURL,
+      // fullHDURL (1920px) when the account exposes it; else largeImageURL
+      // (1280px). Prefer the larger so full-bleed stills stay sharp at 1080p.
+      url: h.fullHDURL || h.largeImageURL || h.webformatURL,
       width: h.imageWidth, height: h.imageHeight,
       license: "Pixabay Content License",
       sourceUrl: h.pageURL,

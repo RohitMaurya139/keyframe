@@ -6,6 +6,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { z } = require("zod");
+const config = require("../config");
 const openrouter = require("./openrouter");
 
 const SYSTEM = fs.readFileSync(
@@ -57,12 +58,21 @@ function wordCount(s) { return (s.trim().match(/\S+/g) || []).length; }
 // to keep `start` fields consistent by hand.
 function normalizeScript(script, { targetDuration } = {}) {
   const s = JSON.parse(JSON.stringify(script));
+  // Cap scene count first (schema allows max 24) so timing/total below is
+  // computed over the kept scenes only.
+  if (Array.isArray(s.scenes) && s.scenes.length > 24) s.scenes = s.scenes.slice(0, 24);
   let t = 0;
   s.scenes.forEach((scene, i) => {
     scene.id = scene.id || `s${i + 1}`;
     scene.duration = Math.round(scene.duration * 10) / 10;
     scene.start = Math.round(t * 10) / 10;
     t += scene.duration;
+    // Clamp per-scene arrays to the schema caps so a minor overflow (e.g. the
+    // model emits 5 onScreenText lines) is TRIMMED here rather than throwing a
+    // hard schema rejection that fails the whole script.
+    if (Array.isArray(scene.onScreenText)) scene.onScreenText = scene.onScreenText.slice(0, 4);
+    if (Array.isArray(scene.assetNeeds)) scene.assetNeeds = scene.assetNeeds.slice(0, 3);
+    if (Array.isArray(scene.sfx)) scene.sfx = scene.sfx.slice(0, 2);
   });
 
   // Snap total to the target duration by stretching/shrinking the last scene
@@ -138,6 +148,12 @@ async function generateScript({ brief, signal }) {
   let lastErr = "";
   let userMsg = user;
 
+  // The default script model (gemini-2.5-flash) occasionally "lazy stops" and
+  // returns a truncated JSON object. openrouter.chat now retries+falls back on
+  // that, but as belt-and-suspenders the 2nd attempt escalates to a model that
+  // reliably emits the full script (verified: gemini-2.5-pro returns it whole).
+  const ESCALATION_MODEL = config.llm.scriptEscalationModel || "google/gemini-2.5-pro";
+
   for (let attempt = 1; attempt <= 2; attempt++) {
     const { text, tokensIn, tokensOut } = await openrouter.chat({
       system: SYSTEM,
@@ -146,6 +162,7 @@ async function generateScript({ brief, signal }) {
       stage: "script",
       temperature: 0.7,
       signal,
+      ...(attempt === 2 ? { model: ESCALATION_MODEL } : {}),
     });
     totalIn += tokensIn;
     totalOut += tokensOut;

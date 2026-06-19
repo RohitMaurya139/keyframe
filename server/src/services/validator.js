@@ -47,10 +47,56 @@ function runLint(jobDir) {
   });
 }
 
+// Spatial layout audit: `npx hyperframes inspect` renders the composition in
+// headless Chrome and reports elements that OCCLUDE each other in SPACE (the
+// "random cards on top of each other" symptom that lint — which only checks
+// TIME/track overlaps — can never catch). Returns { ok, errors:[...], skipped }.
+//
+// Critical contract (verified live, hyperframes ≥0.6.112):
+//   • inspect prints its report JSON on STDOUT and EXITS 1 whenever any
+//     error-severity issue exists, even WITHOUT --strict. A [StaticGuard] line
+//     can also land on STDERR. So we DO NOT trust the exit code — we parse the
+//     stdout JSON and gate on the JSON's own severity field.
+//   • It launches headless Chromium; if that's unavailable / output unparseable,
+//     we return { ok:true, skipped:true } — never block generation (same
+//     philosophy as runtime_check.js).
+//   • We gate ONLY on severity==='error' (code text_occluded). content_overlap /
+//     container_overflow come back as WARNINGS and are intentionally ignored to
+//     avoid churn on particle fields / transient transition seams.
+function runInspect(jobDir) {
+  return new Promise((resolve) => {
+    const cmd = WINDOWS ? "npx.cmd" : "npx";
+    const p = spawn(cmd, ["--yes", "hyperframes", "inspect", "--json", "--at-transitions", "--tolerance", "4", "."], {
+      cwd: jobDir,
+      env: process.env,
+      shell: WINDOWS,
+    });
+    let out = "", err = "";
+    p.stdout.on("data", (d) => { out += d.toString(); });
+    p.stderr.on("data", (d) => { err += d.toString(); });
+
+    const timer = setTimeout(() => { try { p.kill("SIGKILL"); } catch { /* noop */ } }, 90_000);
+
+    p.on("exit", () => {
+      clearTimeout(timer);
+      // Parse stdout JSON — NOT the exit code (1 == "found errors", not "failed to run").
+      try {
+        const j = JSON.parse(out);
+        const errors = (j.issues || []).filter((i) => i.severity === "error");
+        resolve({ ok: errors.length === 0, errors, skipped: false });
+      } catch {
+        // Could not parse (no Chromium, crash, empty) — never block.
+        resolve({ ok: true, errors: [], skipped: true, note: (err || out).slice(-200) });
+      }
+    });
+    p.on("error", () => { clearTimeout(timer); resolve({ ok: true, errors: [], skipped: true }); });
+  });
+}
+
 async function validate(jobDir, files) {
   writeFiles(jobDir, files);
   const lint = await runLint(jobDir);
   return lint;
 }
 
-module.exports = { validate, writeFiles };
+module.exports = { validate, writeFiles, runInspect };

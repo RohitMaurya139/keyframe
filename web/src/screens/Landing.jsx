@@ -75,11 +75,53 @@ const PIPELINE = [
   ["Render", "deterministic, frame-perfect MP4 + captions"],
 ];
 
+// Real, shippable capabilities — no fabricated logos or testimonials. These
+// frame what KEYFRAME actually does and the looks it actually ships with.
+const PROOF_TAGS = [
+  "Script-to-film in minutes",
+  "Voiced & captioned",
+  "Brand colors from your URL",
+  "MP4 + .srt export",
+];
+
+const STYLE_NAMES = [
+  "Blockframe", "Biennale Yellow", "Noir Spotlight", "Vapor Chrome",
+  "Midnight Glass", "Aurora Spectrum", "Bauhaus Print", "Kinetic Bold",
+  "Mono Corporate", "Bloom Illustrated",
+];
+
 export default function Landing({ onStart }) {
   return (
     <div className="mt-28">
+      {/* ——— credibility band: capability framing, not fake social proof ——— */}
+      <section className="max-w-4xl mx-auto px-6">
+        <motion.div {...reveal} className="glass-card px-6 py-7 sm:px-8">
+          <p className="font-display font-bold text-lg sm:text-xl leading-snug">
+            <span className="text-accent-text">10 art-directed styles</span>
+            <span className="text-dim"> · </span>
+            script-to-film in minutes.
+          </p>
+          <div className="mt-5 flex flex-wrap gap-2.5">
+            {PROOF_TAGS.map((t) => (
+              <span key={t} className="chip uppercase" style={{ "--chip": "var(--color-sky)" }}>{t}</span>
+            ))}
+          </div>
+          <div className="mt-6 pt-5 border-t border-line">
+            <div className="text-[11px] uppercase tracking-widest text-dim">Made with KEYFRAME · the style packs</div>
+            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-[13px] text-ink font-display">
+              {STYLE_NAMES.map((name, i) => (
+                <span key={name} className="flex items-center gap-3">
+                  {name}
+                  {i < STYLE_NAMES.length - 1 && <span className="text-dim" aria-hidden="true">·</span>}
+                </span>
+              ))}
+            </div>
+          </div>
+        </motion.div>
+      </section>
+
       {/* ——— morning: how it works ——— */}
-      <section className="max-w-3xl mx-auto px-6">
+      <section className="max-w-3xl mx-auto px-6 mt-36">
         <motion.div {...reveal}>
           <Eyebrow color="var(--color-sun)">How it works</Eyebrow>
           <SectionTitle>A whole studio,<br />between sunrise and midnight.</SectionTitle>
@@ -187,12 +229,12 @@ export default function Landing({ onStart }) {
           </p>
           <motion.button whileTap={{ scale: 0.97 }} onClick={onStart}
             className="btn-solstice uppercase text-sm mt-10">
-            Start your film ↑
+            Make your first film ↑
           </motion.button>
         </motion.div>
 
         <motion.footer {...reveal} className="mt-28 pt-8 border-t border-line text-[11px] uppercase tracking-widest text-dim flex items-center justify-between">
-          <span>KEY<span className="text-accent">FRAME</span> — multi-modal AI video studio</span>
+          <span>KEY<span className="text-accent-text">FRAME</span> — multi-modal AI video studio</span>
           <span>prompt · URL · video → film</span>
         </motion.footer>
       </section>

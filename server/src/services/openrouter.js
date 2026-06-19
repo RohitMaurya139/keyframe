@@ -20,6 +20,7 @@
 
 const OpenAI = require("openai");
 const config = require("../config");
+const { extractFirstJsonObject } = require("./json_lenient");
 
 const client = new OpenAI({
   apiKey: config.llm.apiKey,
@@ -36,10 +37,18 @@ function modelForStage(stage) {
   const table = config.llm.stageModels || {};
   const kind = table[stage] || "default";
   if (kind === "fast") return config.llm.modelFast || config.llm.model;
-  return config.llm.model;
+  if (kind === "default") return config.llm.model;
+  // Any other value is treated as a literal OpenRouter model id, so a single
+  // heavy stage (the composer) can run on a stronger model than the cheap
+  // default used for planning. e.g. stageModels.composer = "anthropic/claude-..."
+  return kind;
 }
 
 function isRetryable(err) {
+  // Empty / truncated-JSON completions are flagged retryable by callOnce (gemini
+  // "lazy stop" returns finish_reason:"stop" with a near-empty body — not an HTTP
+  // error, so we synthesize one to drive a retry + model fallback).
+  if (err?.retryable === true) return true;
   const status = err?.status || err?.response?.status;
   if (status === 429) return true;
   // 402 = the key's daily credit limit can't cover this model's max_tokens
@@ -129,25 +138,63 @@ async function callKie({ messages, jsonMode, temperature, timeoutMs, stage, sign
 }
 
 // ---------- FALLBACK: OpenRouter via OpenAI SDK ----------
+// Retries transient failures (429/402/5xx/timeout) on the SAME model with
+// backoff before giving up — Gemini's OpenAI-compat endpoint throws frequent
+// transient 503s, and without this a single 503 on a composer repair lap kills
+// the whole composition (falling back to the deterministic template).
 async function callOnce({ body, timeoutMs, stage, model, signal: external }) {
-  const { signal, clear: hardTimer } = withTimeoutSignal(external, timeoutMs, "call timed out");
-  const t0 = Date.now();
-  try {
-    const resp = await client.chat.completions.create({ ...body, model }, { signal });
-    const dt = Date.now() - t0;
-    const text = resp.choices?.[0]?.message?.content ?? "";
-    const tokensIn = resp.usage?.prompt_tokens ?? 0;
-    const tokensOut = resp.usage?.completion_tokens ?? 0;
-    console.log(`[openrouter] ${model} stage=${stage || "?"} ok (${dt}ms, in=${tokensIn} out=${tokensOut}, ${text.length}ch)`);
-    return { text, tokensIn, tokensOut, model };
-  } catch (err) {
-    const dt = Date.now() - t0;
-    const tag = err?.status || err?.code || err?.name || err?.message?.slice(0, 80) || "unknown";
-    console.warn(`[openrouter] ${model} stage=${stage || "?"} FAILED after ${dt}ms: ${tag}`);
-    throw err;
-  } finally {
-    hardTimer();
+  const MAX_ATTEMPTS = 3;
+  let lastErr;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    if (external?.aborted) throw external.reason || new Error("call aborted");
+    const { signal, clear: hardTimer } = withTimeoutSignal(external, timeoutMs, "call timed out");
+    const t0 = Date.now();
+    try {
+      const resp = await client.chat.completions.create({ ...body, model }, { signal });
+      const dt = Date.now() - t0;
+      const text = resp.choices?.[0]?.message?.content ?? "";
+      const finish = resp.choices?.[0]?.finish_reason;
+      const tokensIn = resp.usage?.prompt_tokens ?? 0;
+      const tokensOut = resp.usage?.completion_tokens ?? 0;
+
+      // Guard against gemini's intermittent "lazy stop": a 200-OK response
+      // (finish_reason usually "stop") whose body is empty or — in JSON mode — a
+      // truncated/unbalanced object. It is NOT an HTTP error, so without this the
+      // caller gets junk and re-hits the same flaky model. Synthesize a retryable
+      // error so the loop retries this model, then chat() escalates to the fallback.
+      const wantsJson = body?.response_format?.type === "json_object";
+      let badCompletion = null;
+      if (!text.trim()) {
+        badCompletion = `empty completion (finish=${finish}, out=${tokensOut})`;
+      } else if (wantsJson) {
+        try { extractFirstJsonObject(text); }
+        catch { badCompletion = `truncated/unparseable JSON (finish=${finish}, out=${tokensOut}, ${text.length}ch)`; }
+      }
+      if (badCompletion) {
+        console.warn(`[openrouter] ${model} stage=${stage || "?"} returned a bad completion: ${badCompletion}`);
+        const e = new Error(badCompletion); e.retryable = true; throw e;
+      }
+
+      console.log(`[openrouter] ${model} stage=${stage || "?"} ok (${dt}ms, in=${tokensIn} out=${tokensOut}, ${text.length}ch)`);
+      return { text, tokensIn, tokensOut, model };
+    } catch (err) {
+      const dt = Date.now() - t0;
+      const tag = err?.status || err?.code || err?.name || err?.message?.slice(0, 80) || "unknown";
+      console.warn(`[openrouter] ${model} stage=${stage || "?"} FAILED after ${dt}ms: ${tag}`);
+      lastErr = err;
+      hardTimer();
+      if (attempt < MAX_ATTEMPTS && isRetryable(err) && !external?.aborted) {
+        const backoff = 1500 * attempt;
+        console.warn(`[openrouter] ${model} transient ${tag} — retry ${attempt}/${MAX_ATTEMPTS - 1} in ${backoff}ms`);
+        await new Promise((r) => setTimeout(r, backoff));
+        continue;
+      }
+      throw err;
+    } finally {
+      hardTimer();
+    }
   }
+  throw lastErr;
 }
 
 async function chat({ system, user, jsonMode = false, temperature, model, stage, signal }) {
@@ -206,27 +253,29 @@ async function chat({ system, user, jsonMode = false, temperature, model, stage,
   }
 }
 
-// Daily-budget probe (free endpoint, 60s cache). Returns
-// { remaining, limit } in USD, or null when the probe itself fails —
-// callers must treat null as "unknown, proceed".
+// Budget probe (free endpoints, 60s cache). Returns { remaining, limit } in
+// USD, or null when the probe fails — callers must treat null as "unknown,
+// proceed". True spendable budget is the LARGER of the per-key remaining
+// (/key.limit_remaining) and the account balance (/credits: total - usage):
+// a key can show a low per-key cap reading yet still draw from the account's
+// credits (verified: calls succeed against a $53 account whose key reports
+// $0.004 remaining). Using the max avoids falsely blocking a funded account.
 let budgetCache = { at: 0, value: null };
 async function checkBudget() {
   if (Date.now() - budgetCache.at < 60_000) return budgetCache.value;
+  const base = config.llm.baseUrl.replace(/\/$/, "");
+  const hdr = { Authorization: `Bearer ${config.llm.apiKey}` };
+  let perKey = null, account = null, limit = null;
   try {
-    const resp = await fetch(`${config.llm.baseUrl.replace(/\/$/, "")}/key`, {
-      headers: { Authorization: `Bearer ${config.llm.apiKey}` },
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const j = await resp.json();
-    const d = j.data || {};
-    budgetCache = {
-      at: Date.now(),
-      value: { remaining: d.limit_remaining ?? null, limit: d.limit ?? null },
-    };
-  } catch {
-    budgetCache = { at: Date.now(), value: null };
-  }
+    const r = await fetch(`${base}/key`, { headers: hdr, signal: AbortSignal.timeout(10_000) });
+    if (r.ok) { const d = (await r.json()).data || {}; perKey = d.limit_remaining ?? null; limit = d.limit ?? null; }
+  } catch { /* probe optional */ }
+  try {
+    const r = await fetch(`${base}/credits`, { headers: hdr, signal: AbortSignal.timeout(10_000) });
+    if (r.ok) { const d = (await r.json()).data || {}; const c = Number(d.total_credits), u = Number(d.total_usage); if (Number.isFinite(c) && Number.isFinite(u)) account = c - u; }
+  } catch { /* probe optional */ }
+  const remaining = (perKey != null || account != null) ? Math.max(perKey ?? 0, account ?? 0) : null;
+  budgetCache = { at: Date.now(), value: remaining == null ? null : { remaining, limit } };
   return budgetCache.value;
 }
 

@@ -9,6 +9,35 @@ const config = require("../config");
 
 const WINDOWS = process.platform === "win32";
 
+// Run an ffmpeg invocation and resolve with its stdout buffer (null on error).
+function ffCapture(args) {
+  return new Promise((resolve) => {
+    const p = spawn("ffmpeg", args);
+    const chunks = [];
+    p.stdout.on("data", (d) => chunks.push(d));
+    p.on("error", () => resolve(null));
+    p.on("exit", () => resolve(Buffer.concat(chunks)));
+  });
+}
+
+// Pick a NON-BLACK gallery poster. Videos that open on a dark scene (e.g. a
+// "chaos" intro) yield a black thumbnail when a single early frame is grabbed,
+// making the gallery card look blank. Sample several frames across the clip and
+// keep the brightest one.
+async function generateThumbnail(videoPath, thumbPath, durationSec) {
+  const dur = Number(durationSec) > 0 ? Number(durationSec) : 10;
+  const fracs = [0.12, 0.25, 0.38, 0.5, 0.62, 0.75, 0.88];
+  let bestT = (dur * 0.5).toFixed(2);
+  let bestLum = -1;
+  for (const fr of fracs) {
+    const t = Math.max(0.1, dur * fr).toFixed(2);
+    const buf = await ffCapture(["-v", "error", "-ss", String(t), "-i", videoPath, "-frames:v", "1", "-vf", "scale=1:1,format=gray", "-f", "rawvideo", "-"]);
+    const lum = buf && buf.length ? buf[0] : 0; // single 1x1 gray pixel = avg luminance
+    if (lum > bestLum) { bestLum = lum; bestT = t; }
+  }
+  await ffCapture(["-y", "-hide_banner", "-loglevel", "error", "-ss", String(bestT), "-i", videoPath, "-frames:v", "1", "-vf", "scale=640:-2", "-q:v", "4", thumbPath]);
+}
+
 function render({ jobId, jobDir, durationSec, quality = config.server.renderQuality, abortSignal }) {
   return new Promise((resolve, reject) => {
     const cmd = WINDOWS ? "npx.cmd" : "npx";
@@ -108,11 +137,11 @@ function render({ jobId, jobDir, durationSec, quality = config.server.renderQual
         fs.unlinkSync(srcPath);
       }
 
-      // Gallery thumbnail (best effort, non-blocking).
+      // Gallery thumbnail (best effort, non-blocking): brightest sampled frame
+      // so a dark intro never produces a blank-looking card.
       try {
         const thumbPath = path.join(config.paths.videosDir, `${jobId}.jpg`);
-        spawn("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-ss", "1", "-i", destPath, "-vframes", "1", "-vf", "scale=640:-2", "-q:v", "4", thumbPath])
-          .on("error", () => { /* thumbnail is optional */ });
+        generateThumbnail(destPath, thumbPath, durationSec).catch(() => { /* thumbnail is optional */ });
       } catch { /* noop */ }
 
       resolve({ videoPath: destPath, videoUrl: `/videos/${jobId}.mp4` });

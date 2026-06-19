@@ -101,7 +101,9 @@ async function understandWebsite({ url, workDir, timeoutMs = 60_000 }) {
 
   try {
     const page = await browser.newPage();
-    await page.setViewport({ width: 1366, height: 900 });
+    // deviceScaleFactor:2 = retina capture (~2732x1800) so screenshots stay
+    // crisp when scaled up inside a browser frame in a 1080p+ video.
+    await page.setViewport({ width: 1366, height: 900, deviceScaleFactor: 2 });
     await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36");
     await page.goto(url, { waitUntil: "networkidle2", timeout: timeoutMs });
     // Let lazy content/fonts settle briefly.

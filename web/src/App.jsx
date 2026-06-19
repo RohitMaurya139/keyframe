@@ -38,7 +38,7 @@ export default function App() {
   useEffect(() => { window.scrollTo({ top: 0 }); }, [view]);
 
   const screens = {
-    create: <CreateScreen onCreated={(id, autopilot) => go(autopilot ? "theater" : "understanding", id)} />,
+    create: <CreateScreen onCreated={(id) => go("understanding", id)} />,
     understanding: <UnderstandingScreen projectId={projectId} onScriptReady={() => go("script")} onFailed={() => go("create")} />,
     script: <ScriptRoom projectId={projectId} onApproved={() => go("theater")} />,
     theater: <ProductionTheater projectId={projectId} onDone={() => go("premiere")} onFailed={() => go("create")} />,
@@ -56,15 +56,26 @@ export default function App() {
       <header className="sticky top-0 z-50 flex items-center justify-between px-8 py-4 border-b border-line bg-panel backdrop-blur-md">
         <button
           onClick={() => go("create", null)}
-          className="font-display font-bold tracking-[0.2em] text-ink text-sm uppercase"
+          className="flex items-center gap-2.5 font-display font-bold tracking-[0.18em] text-ink text-base sm:text-lg uppercase"
         >
-          KEY<span className="text-accent">FRAME</span>
+          {/* Brand anchor: a sun-disc / keyframe-diamond mark in the sun token */}
+          <svg
+            width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"
+            className="shrink-0" style={{ color: "var(--color-sun)" }}
+          >
+            <circle cx="12" cy="12" r="5" fill="currentColor" />
+            <path
+              d="M12 0.5 L13.4 4 L12 5.4 L10.6 4 Z M12 23.5 L10.6 20 L12 18.6 L13.4 20 Z M0.5 12 L4 10.6 L5.4 12 L4 13.4 Z M23.5 12 L20 13.4 L18.6 12 L20 10.6 Z"
+              fill="currentColor"
+            />
+          </svg>
+          <span>KEY<span className="text-accent-text">FRAME</span></span>
         </button>
         <nav className="flex gap-6 text-xs uppercase tracking-widest text-dim">
-          <button onClick={() => go("create", null)} className={view === "create" ? "text-accent" : "hover:text-ink"}>
+          <button onClick={() => go("create", null)} className={view === "create" ? "text-accent-text" : "hover:text-ink"}>
             Create
           </button>
-          <button onClick={() => go("gallery")} className={view === "gallery" ? "text-accent" : "hover:text-ink"}>
+          <button onClick={() => go("gallery")} className={view === "gallery" ? "text-accent-text" : "hover:text-ink"}>
             Gallery
           </button>
         </nav>

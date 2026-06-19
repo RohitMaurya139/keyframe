@@ -138,6 +138,8 @@ indigo navy) is **every line of type and every rule** — there is no secondary 
 are bloom mid/outer stops. `{colors.ember}` appears **only** as a 15–22% counter-bloom — never a
 fill, never text. **The system never inverts** — ink on sun is correct; yellow text on ink does not exist.
 
+**Text color law:** ALL body and display type is `{colors.ink}` (one ink, contrast from size/weight, never color); `{colors.sun}`/`{colors.ember}` are never text. Any text over an image/video sits on the `{colors.yellow}` panel or a paper band — ink on a light surface — never raw on a busy image.
+
 ## Typography
 
 Two ramps. The **reading/data ramp** (Archivo body 0.85cqw ink, micro-labels in px, JetBrains Mono

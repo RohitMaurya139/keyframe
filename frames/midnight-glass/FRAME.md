@@ -113,6 +113,8 @@ ALL text is `{colors.inklight}` (display) or `{colors.frost}` (body/labels) — 
 `{colors.violet}` is strictly atmospheric (counter-orb at low opacity). `{colors.glasslight}` is never
 opaque — 5-18% for fills/borders/grid. **No greens, no reds, no warm hues anywhere.**
 
+**Text color law:** display text is `{colors.inklight}`, body/labels `{colors.frost}` — `{colors.neon}`/`{colors.violet}` are accent light only, never body or headline text. Any text over an image/video sits on a `glass-card` scrim (light text on the frosted dark panel), never raw on a busy image.
+
 ## Typography
 
 - **Display:** Space Grotesk 700 only, tight line-height (0.98–1.15), tracking −0.01 to −0.03em, sentence case or caps — fit-to-measure: ≤3 words → `heading-xl`; 4–6 → `heading-lg`; 7+ → `heading-md`. Cap blocks at ≤ 75cqw.

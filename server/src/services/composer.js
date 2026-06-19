@@ -16,6 +16,49 @@ const SYSTEM_BASE = fs.readFileSync(
   "utf8"
 );
 
+// Minimum inline-SVG vector primitives a composition must contain. The prompt
+// asks for ~6+ per scene; this is a lenient floor that simply rejects the
+// vector-less image-slideshow failure mode (enforced in quickCheck).
+const MIN_VECTOR_PRIMITIVES = 6;
+
+// Relative luminance (WCAG) from a #RRGGBB hex, 0 (black) … 1 (white).
+function luminance(hex) {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(String(hex || ""));
+  if (!m) return null;
+  const lin = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+  const [r, g, b] = [m[1], m[2], m[3]].map((h) => lin(parseInt(h, 16)));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+// Build a concrete, deterministic contrast recipe from the pack's actual
+// palette hexes, so the composer never guesses which token is safe for text.
+// The lightest token is the only safe text color on dark grounds; the darkest
+// is the only safe text color on light grounds. Everything chromatic in
+// between is accent-only. This kills the #1 amateur tell: text that blends
+// into its background.
+function contrastRecipe(colors) {
+  const entries = Object.entries(colors)
+    .map(([name, hex]) => ({ name, hex, L: luminance(hex) }))
+    .filter((e) => e.L != null);
+  if (entries.length < 2) return null;
+  const sorted = [...entries].sort((a, b) => a.L - b.L);
+  const darkest = sorted[0];
+  const lightest = sorted[sorted.length - 1];
+  const fmt = (e) => `${e.hex} (${e.name})`;
+  const darkGrounds = entries.filter((e) => e.L < 0.4);
+  const lightGrounds = entries.filter((e) => e.L >= 0.4);
+  return [
+    "## CONTRAST RECIPE — derived from THIS pack's palette (obey on EVERY text element)",
+    "",
+    `- Text on a DARK ground: use ONLY ${fmt(lightest)} (the lightest token). No exceptions for headlines, body, labels, or captions.`,
+    `- Text on a LIGHT ground: use ONLY ${fmt(darkest)} (the darkest token). No exceptions.`,
+    darkGrounds.length ? `- DARK grounds (→ light text): ${darkGrounds.map(fmt).join(", ")}.` : "",
+    lightGrounds.length ? `- LIGHT grounds (→ dark text): ${lightGrounds.map(fmt).join(", ")}.` : "",
+    "- Every OTHER (chromatic) token is an ACCENT — use it for a single emphasized word, an underline/marker draw, a CTA, or a decoration. NEVER as the color of a paragraph, headline, label, or caption.",
+    "- Per scene: read the ground's luminance, pick the matching safe text token above, then shrink the scene to a mental thumbnail. If you must squint, the pair FAILS — add a solid contrast device (panel/card/scrim/band in a ground color) behind the text, never just lower its opacity.",
+  ].filter(Boolean).join("\n");
+}
+
 // "Allowed colors: ..." with concrete hexes survives long-prompt attention
 // dilution far better than prose like "use the design system's palette".
 function paletteLaw(framePack) {
@@ -29,8 +72,10 @@ function paletteLaw(framePack) {
     "Opacity/rgba variants of these exact hues are allowed (blooms, overlays); any other hex/hsl/named color is a DEFECT. In particular: NO dark-navy gradients, NO neon cyan/purple accents, NO generic 'AI video' styling — those belong to other design systems, not this one.",
   ];
   if (tokens.fonts.length) {
-    lines.push(`The ONLY font families permitted: ${tokens.fonts.join(", ")} (plus generic fallbacks). Load exactly these via ONE Google Fonts <link>. Inter/Roboto are NOT automatically allowed — only if listed here.`);
+    lines.push(`This design system's typography is "${tokens.fonts.join(", ")}". External/webfonts CANNOT be loaded (offline render, lint-enforced — see hard constraint #2), so approximate that identity with the system stack \`Inter, "Segoe UI", system-ui, Roboto, Helvetica, Arial, sans-serif\` and reproduce its WEIGHT, CASE, TRACKING and SCALE exactly. Do NOT add a Google Fonts <link>.`);
   }
+  const recipe = contrastRecipe(tokens.colors);
+  if (recipe) lines.push("", recipe);
   return lines.join("\n");
 }
 
@@ -82,7 +127,7 @@ async function getSystemPromptWithSkills(framePack) {
     parts.push("Precedence rules:");
     parts.push("- This design system OVERRIDES the storyboard's `palette` and `fontFamily` fields — ignore them.");
     parts.push("- It OVERRIDES the generic typography / gradient-text / color guidance earlier in this prompt wherever they conflict.");
-    parts.push("- The single Google Fonts <link> must load the font families THIS design system names (multiple families combined in one <link> is allowed). Do not load any other families.");
+    parts.push("- Do NOT load external/Google fonts (offline render, lint-enforced). Use the system font stack and express THIS design system's type identity through weight, case, tracking, and scale.");
     parts.push("- Hard technical constraints still apply unchanged: clip structure, exactly one paused GSAP timeline registered on window.__timelines[\"vid\"], asset src whitelist, no extra <script> tags, no fetch/XHR.");
     parts.push("- The design spec below covers composition only; motion is yours. Keep the visual-richness checklist from earlier, but express it ENTIRELY with this system's atoms — animate ITS decorations, ITS rules/blooms/shadows, ITS type. Do not import foreign visual elements (e.g. no neon gradients on a parchment system, no soft blurred shadows on a hard-shadow system).");
     parts.push("");
@@ -97,12 +142,17 @@ async function getSystemPromptWithSkills(framePack) {
 }
 
 function buildUser(storyboard, { width, height, fps, availableAssets, framePack, captionCues }) {
+  // Pull repair signals out of the storyboard so they're surfaced as explicit
+  // instructions below, instead of buried inside the JSON dump (where the model
+  // ignores them — and regenerates from scratch, dropping required structure).
+  // Always clone so we never mutate the caller's object.
+  const sb = { ...storyboard };
+  const lintFeedback = sb.__lintFeedback; delete sb.__lintFeedback;
+  const qaIssues = sb.__qaIssuesToFix;    delete sb.__qaIssuesToFix;
   // With a design system active, the storyboard's palette/fontFamily are a
   // competing signal — remove them entirely rather than asking the model to
   // ignore them.
-  let sb = storyboard;
   if (framePack) {
-    sb = { ...storyboard };
     delete sb.palette;
     delete sb.fontFamily;
   }
@@ -118,8 +168,10 @@ function buildUser(storyboard, { width, height, fps, availableAssets, framePack,
     JSON.stringify(availableAssets || [], null, 2),
     "",
     (availableAssets && availableAssets.length)
-      ? "Use these local asset paths (and ONLY these) in any <img> or <video> src attributes. Use EVERY asset listed — each was fetched for the scene named in its sceneId (background = full-bleed mood under a scrim, inset = framed evidence). An unused asset is a wasted scene."
-      : "No assets pre-fetched. Do NOT include any <img> or <video> tags.",
+      ? "Use these local asset paths (and ONLY these) in any <img>/<video> src attributes. Use EVERY asset listed — each was fetched for the scene in its sceneId (background = full-bleed under a scrim with Ken Burns motion; inset = framed evidence). An unused asset is a wasted scene. These fetched assets are the FLOOR, not the ceiling: layer your OWN animated vector graphics on top of them — SVG particle fields, drifting shapes, drawing lines, rotating icons, burst marks, animated underlines — so that, combining the photos AND your vectors, a fresh visual element enters or leaves the frame every 1–2 seconds for the ENTIRE duration. Never let the frame hold static for more than ~1.5s."
+      : "No image/video assets were pre-fetched, so do NOT include any <img> or <video> tags — but you MUST still hit the asset/vector cadence using your OWN generated vector graphics: dense animated SVG (particle fields, drifting shapes, drawing lines, rotating icons, burst marks) layered continuously so a fresh visual element enters or leaves the frame every 1–2 seconds. A text-only frame is a failure.",
+    "",
+    `HARD VECTOR REQUIREMENT (auto-checked, rejected if unmet): the composition MUST contain at least one inline <svg> and at least ${MIN_VECTOR_PRIMITIVES} animated vector primitive elements (<circle>/<path>/<line>/<rect>/<polygon>) total — ideally a dense field in EVERY scene — each animated by the GSAP timeline. A composition with no inline SVG vectors will be REJECTED and you will have to redo it.`,
   ];
 
   if (captionCues && captionCues.length) {
@@ -134,6 +186,27 @@ function buildUser(storyboard, { width, height, fps, availableAssets, framePack,
     lines.push(`CRITICAL: render this video entirely in the "${framePack}" DESIGN SYSTEM defined at the end of the system prompt. Atoms sacred, composition free.`);
     if (tokens && Object.keys(tokens.colors).length) {
       lines.push(`The ONLY allowed colors: ${Object.values(tokens.colors).join(", ")}. The ONLY allowed fonts: ${tokens.fonts.join(", ") || "per the design system"}. Scene backgrounds must be the system's ground colors — never dark navy, never generic gradients.`);
+    }
+  }
+
+  if (lintFeedback || (qaIssues && qaIssues.length)) {
+    lines.push("");
+    lines.push("## CRITICAL — THIS IS A REPAIR PASS");
+    lines.push("Return a CORRECTED full document. Fix ONLY the problems below; keep everything that already worked — the same scenes, the same assets in the same <img>/<video> tags, and the GSAP timeline structure.");
+    lines.push("MUST-KEEP (dropping any of these FAILS the build):");
+    lines.push('- The exact final lines `window.__timelines = window.__timelines || {}; window.__timelines["vid"] = tl;` — never remove or rename them.');
+    lines.push('- `gsap.timeline({ paused: true })`, the root `data-composition-id="vid"` with its data-width/data-height/data-duration.');
+    lines.push("- Every asset src already present — do NOT drop any image or video.");
+    lines.push("- No external/Google fonts — system font stack only.");
+    if (lintFeedback) {
+      lines.push("");
+      lines.push("Problems to fix (hyperframes lint / runtime):");
+      lines.push(String(lintFeedback));
+    }
+    if (qaIssues && qaIssues.length) {
+      lines.push("");
+      lines.push("QA issues to fix:");
+      for (const q of qaIssues) lines.push(`- ${q}`);
     }
   }
 
@@ -172,7 +245,7 @@ function extractSrcs(html, tag) {
   return found;
 }
 
-function quickCheck(indexHtml, metaJsonStr, { width, height, duration, assets }) {
+function quickCheck(indexHtml, metaJsonStr, { width, height, duration, assets, enforceVectors = true }) {
   const errs = [];
 
   let meta;
@@ -220,6 +293,31 @@ function quickCheck(indexHtml, metaJsonStr, { width, height, duration, assets })
   if (/\bfetch\s*\(/i.test(indexHtml)) errs.push("forbidden: fetch() call");
   if (/\bXMLHttpRequest\b/i.test(indexHtml)) errs.push("forbidden: XMLHttpRequest");
 
+  // Vector requirement — the system prompt mandates a dense animated SVG/vector
+  // layer in every scene, but nothing enforced it, so models shipped vector-less
+  // image slideshows. Reject a composition that has no real inline vectors so the
+  // retry loop forces them in. Skipped on a repair pass (enforceVectors=false) so
+  // a vector-light but otherwise-correct lint/runtime fix isn't bounced for an
+  // unrelated reason.
+  //
+  // Count primitives ONLY inside <svg>…</svg> (so tag-name mentions in comments,
+  // CSS, or <script> string literals can't inflate the count), and use a
+  // lookahead so no-space self-closing tags (<circle/>) still count while
+  // <radialGradient>/<clipPath> etc. do not.
+  if (enforceVectors) {
+    const PRIM_RE = /<(?:circle|ellipse|path|rect|polygon|polyline|line)(?=[\s/>])/gi;
+    const svgBlocks = indexHtml.match(/<svg[\s\S]*?<\/svg>/gi) || [];
+    const svgCount = svgBlocks.length;
+    const vectorPrims = svgBlocks.reduce((n, b) => n + (b.match(PRIM_RE) || []).length, 0);
+    if (svgCount < 1 || vectorPrims < MIN_VECTOR_PRIMITIVES) {
+      errs.push(
+        `too few inline vector graphics (found ${svgCount} <svg> block(s) with ${vectorPrims} vector shapes inside). ` +
+        `You MUST author animated inline SVG vector layers — drifting particle/bokeh fields, drawing underlines/connectors, rotating rings, burst marks — per the MANDATORY ASSET & VECTOR CADENCE. ` +
+        `Required: at least one <svg> and at least ${MIN_VECTOR_PRIMITIVES} vector primitive elements (circle/path/line/rect/polygon) INSIDE <svg>, animated by the GSAP timeline.`
+      );
+    }
+  }
+
   return errs;
 }
 
@@ -228,6 +326,10 @@ async function compose(storyboard, { width, height, fps, duration, maxRetries, a
   console.log(`[composer] start (duration=${duration}s, assets=${(availableAssets||[]).length}, maxRetries=${maxRetries}, framePack=${framePack || "none"}, captions=${(captionCues||[]).length})`);
   const system = await getSystemPromptWithSkills(framePack);
   const user = buildUser(storyboard, { width, height, fps, availableAssets, framePack, captionCues });
+  // Enforce the inline-vector floor on the first-pass compose only. A repair
+  // pass exists to fix a specific lint/runtime failure; re-failing its corrected
+  // doc over an unrelated vector count would needlessly escalate to fallback.
+  const enforceVectors = !(storyboard && (storyboard.__lintFeedback || storyboard.__qaIssuesToFix));
   const tries = (maxRetries ?? 2) + 1;
   let totalIn = 0, totalOut = 0;
   let lastErrors = [];
@@ -258,7 +360,7 @@ async function compose(storyboard, { width, height, fps, duration, maxRetries, a
     }
 
     const errs = quickCheck(env.indexHtml, env.metaJson, {
-      width, height, duration, assets: availableAssets,
+      width, height, duration, assets: availableAssets, enforceVectors,
     });
     if (errs.length === 0) {
       console.log(`[composer] success in ${Date.now() - t0}ms (tokens in=${totalIn} out=${totalOut})`);

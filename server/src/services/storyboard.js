@@ -61,7 +61,10 @@ function validate(storyboard, { duration, orientation }) {
         errs.push(`scene[${i}] start/duration must be numbers`);
         return;
       }
-      if (s.start !== cursor) errs.push(`scene[${i}] start ${s.start} should be ${cursor}`);
+      // Tolerant compare: cursor accumulates via += and drifts in floating
+      // point (e.g. 6.8 -> 6.800000000000001), so a strict !== rejects valid
+      // storyboards. Sub-frame tolerance is plenty.
+      if (Math.abs(s.start - cursor) > 0.05) errs.push(`scene[${i}] start ${s.start} should be ${Math.round(cursor * 100) / 100}`);
       if (s.duration < 2 || s.duration > 15) errs.push(`scene[${i}] duration ${s.duration} out of [2,15]`);
       if (!s.kind) errs.push(`scene[${i}] missing kind`);
       if (!s.animation) errs.push(`scene[${i}] missing animation`);
@@ -77,12 +80,12 @@ function validate(storyboard, { duration, orientation }) {
             easing: typeof b.easing === "string" ? b.easing.slice(0, 40) : "power2.out",
           }));
       }
-      cursor += s.duration;
+      cursor = Math.round((cursor + s.duration) * 1000) / 1000;
     });
     if (Math.abs(cursor - duration) > 0.01) {
       errs.push(`scene durations sum to ${cursor}, expected ${duration}`);
     }
-    if (sb.scenes[0]?.kind !== "title") errs.push("first scene kind must be 'title'");
+    if (!["title", "hook"].includes(sb.scenes[0]?.kind)) errs.push("first scene kind must be 'title' or 'hook'");
   }
   return errs;
 }

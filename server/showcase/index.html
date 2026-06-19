@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>KEYFRAME — Script to Screen</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink0:#0A0912; --ink1:#120F22; --ink2:#1B1440;
+      --sun1:#FFD27A; --sun2:#FFB24C; --sun3:#FF8A5C;
+      --moon1:#B8A6FF; --moon2:#8B7CF6; --moon3:#6D5BD0;
+      --ice:#86E8FF; --text:#F4F1FF; --muted:#A99FD6;
+      --line:rgba(255,255,255,0.10);
+      --sig:linear-gradient(100deg,#FFD27A 0%,#FF8A5C 28%,#B8A6FF 68%,#8B7CF6 100%);
+    }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    html, body { width:100%; height:100%; overflow:hidden; background:#000; font-family:'Inter',system-ui,sans-serif; }
+    #root { position:relative; width:1920px; height:1080px; overflow:hidden;
+            background:radial-gradient(135% 120% at 22% 18%, #1B1440 0%, #120F22 42%, #0A0912 100%);
+            container-type:size; }
+    .clip { position:absolute; top:0; left:0; width:100%; height:100%; overflow:hidden; }
+    /* SAFE AREA — all content lives inside this 90%×85% padded box. */
+    .safe { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+            padding:7.5% 5%; box-sizing:border-box; text-align:center; }
+    .cam  { position:absolute; inset:0; }   /* full-bleed per-scene backdrop (camera pushes this, not the content) */
+
+    .kicker { font-weight:700; font-size:1.35cqw; letter-spacing:0.36em; text-transform:uppercase; color:var(--muted); }
+    .h1 { font-weight:800; font-size:5cqw; line-height:1.02; letter-spacing:-0.02em; color:var(--text); max-width:86%; }
+    .h2 { font-weight:800; font-size:3.4cqw; line-height:1.05; letter-spacing:-0.015em; color:var(--text); max-width:86%; }
+    .display { font-weight:900; font-size:8.5cqw; line-height:0.94; letter-spacing:-0.035em; color:var(--text); }
+    .body { font-weight:500; font-size:2cqw; line-height:1.4; color:var(--muted); max-width:80%; }
+    .mono { font-weight:600; font-size:1.65cqw; line-height:1.75; color:#D8D2F6; }
+    .grad { background:var(--sig); background-size:220% 100%; -webkit-background-clip:text; background-clip:text;
+            -webkit-text-fill-color:transparent; color:transparent; }
+    .word, .char { display:inline-block; will-change:transform,opacity; }
+
+    .pill { display:inline-flex; align-items:center; gap:0.8cqw; padding:0.7cqw 1.6cqw; border-radius:999px;
+            border:1px solid var(--line); background:rgba(255,255,255,0.05);
+            font-weight:700; font-size:1.2cqw; letter-spacing:0.2em; text-transform:uppercase; color:var(--moon1); }
+    .pill .dot { width:0.7cqw; height:0.7cqw; border-radius:50%; background:var(--sun2); box-shadow:0 0 1.4cqw var(--sun2); }
+    .glass { background:linear-gradient(160deg, rgba(184,166,255,0.14), rgba(20,15,40,0.55));
+             border:1px solid var(--line); border-radius:1.6cqw;
+             box-shadow:0 1.8cqw 4.5cqw rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08);
+             backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); }
+    .cta { display:inline-flex; align-items:center; gap:1cqw; font-weight:800; font-size:2.4cqw; letter-spacing:-0.01em;
+           color:#180F2E; padding:1.5cqw 3.4cqw; border-radius:999px; background:var(--sig);
+           box-shadow:0 1.6cqw 4cqw rgba(255,150,90,0.35); }
+
+    .blob { position:absolute; border-radius:50%; filter:blur(34px); mix-blend-mode:screen; pointer-events:none; }
+    #sun-blob  { width:78cqw; height:78cqw; left:-18cqw; top:-28cqw; background:radial-gradient(circle, rgba(255,180,76,0.5), transparent 70%); }
+    #moon-blob { width:82cqw; height:82cqw; right:-22cqw; bottom:-32cqw; background:radial-gradient(circle, rgba(139,124,246,0.5), transparent 70%); }
+    .bokeh { position:absolute; border-radius:50%; filter:blur(14px); mix-blend-mode:screen; opacity:0.26; }
+    #vignette { position:absolute; inset:0; pointer-events:none; background:radial-gradient(120% 120% at 50% 44%, transparent 52%, rgba(5,4,12,0.62) 100%); }
+    .glow { position:absolute; border-radius:50%; filter:blur(40px); mix-blend-mode:screen; opacity:0; pointer-events:none; }
+    .sweep { position:absolute; top:0; height:100%; width:18%; opacity:0;
+             background:linear-gradient(100deg, transparent, rgba(255,255,255,0.18), transparent); }
+
+    .editor-line { font-weight:600; font-size:1.9cqw; color:#CFC8F2; }
+    .caret { display:inline-block; width:0.18cqw; height:2.1cqw; vertical-align:-0.35cqw; background:var(--sun2); margin-left:0.3cqw; box-shadow:0 0 1cqw var(--sun2); }
+    .tok-key{color:var(--moon1);} .tok-str{color:var(--sun1);} .tok-num{color:var(--ice);} .tok-mut{color:var(--muted);}
+    .stat-num { font-weight:900; font-size:6cqw; line-height:1; letter-spacing:-0.03em; }
+    .strike { position:absolute; left:0; top:52%; height:0.55cqw; border-radius:999px; background:var(--sun3); width:100%; transform-origin:left center; box-shadow:0 0 1.2cqw var(--sun3); }
+    .diamond { position:absolute; }
+
+    #caps { position:absolute; inset:0; display:flex; justify-content:center; align-items:flex-end; padding-bottom:5.5%; z-index:50; pointer-events:none; }
+    #cap-pill { max-width:74%; height:fit-content; flex:0 0 auto; text-align:center; padding:0.9cqw 2.2cqw; border-radius:999px; opacity:0;
+                background:rgba(12,9,24,0.55); border:1px solid var(--line); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); }
+    #cap-text { font-weight:600; font-size:1.5cqw; line-height:1.3; color:#ECE8FF; }
+  </style>
+</head>
+<body>
+  <div id="root" class="composition" data-composition-id="vid" data-width="1920" data-height="1080" data-start="0" data-duration="33">
+
+    <!-- TRACK 0 — procedural WebGL depth layer -->
+    <canvas id="gl" class="clip" data-start="0" data-duration="33" data-track-index="0" width="1920" height="1080"></canvas>
+
+    <!-- TRACK 1 — living ambient backdrop -->
+    <div id="ambient" class="clip" data-start="0" data-duration="33" data-track-index="1">
+      <div id="sun-blob" class="blob"></div>
+      <div id="moon-blob" class="blob"></div>
+      <div class="bokeh" style="width:9cqw;height:9cqw;left:14%;top:24%;background:var(--sun1);"></div>
+      <div class="bokeh" style="width:6cqw;height:6cqw;left:78%;top:30%;background:var(--moon1);"></div>
+      <div class="bokeh" style="width:11cqw;height:11cqw;left:64%;top:68%;background:var(--sun2);"></div>
+      <div class="bokeh" style="width:5cqw;height:5cqw;left:30%;top:74%;background:var(--moon2);"></div>
+      <div id="vignette"></div>
+    </div>
+
+    <!-- S1 HOOK (0.0–3.4) -->
+    <div class="clip" id="s1" data-start="0" data-duration="3.9" data-track-index="2" style="opacity:0;">
+      <div class="cam" id="s1-cam"><div class="glow" id="s1-glow" style="left:30%;top:20%;width:46cqw;height:34cqw;background:radial-gradient(circle, rgba(255,180,76,0.45), transparent 70%);"></div></div>
+      <div class="safe">
+        <div class="glass" id="s1-editor" style="width:52cqw;padding:2.4cqw 3cqw;opacity:0;">
+          <div class="kicker" style="margin-bottom:1.2cqw;">untitled.script</div>
+          <div class="editor-line"><span id="s1-type"></span><span class="caret" id="s1-caret"></span></div>
+        </div>
+        <h1 class="h1" style="margin-top:3.2cqw;">
+          <span class="word">Every</span> <span class="word">video</span> <span class="word">starts</span> <span class="word">as&nbsp;a</span> <span class="word grad">blank&nbsp;page.</span>
+        </h1>
+      </div>
+    </div>
+
+    <!-- S2 TURN (3.4–7.0) -->
+    <div class="clip" id="s2" data-start="3.4" data-duration="4.1" data-track-index="3" style="opacity:0;">
+      <div class="cam" id="s2-cam"><div class="glow" id="s2-glow" style="left:-10%;top:30%;width:60cqw;height:40cqw;background:radial-gradient(circle, rgba(139,124,246,0.5), transparent 70%);"></div></div>
+      <div class="sweep" id="s2-sweep"></div>
+      <div class="safe">
+        <div style="overflow:hidden;padding:0.4cqw 0;"><h1 class="h1" id="s2-l1">What if the page</h1></div>
+        <div style="overflow:hidden;padding:0.4cqw 0;margin-top:0.3cqw;"><h1 class="h1">could <span class="grad" id="s2-em">direct itself?</span></h1></div>
+      </div>
+    </div>
+
+    <!-- S3 REVEAL (7.0–11.0) -->
+    <div class="clip" id="s3" data-start="7.0" data-duration="4.5" data-track-index="4" style="opacity:0;perspective:1400px;">
+      <div class="cam" id="s3-cam"><div class="glow" id="s3-burst" style="left:50%;top:42%;width:64cqw;height:64cqw;margin-left:-32cqw;margin-top:-32cqw;background:radial-gradient(circle, rgba(255,180,76,0.5), rgba(139,124,246,0.25) 40%, transparent 68%);"></div></div>
+      <div class="safe">
+        <div class="pill" id="s3-pill" style="opacity:0;margin-bottom:2.4cqw;"><span class="dot"></span>Introducing</div>
+        <div id="s3-mark" style="display:flex;align-items:center;gap:1cqw;will-change:transform;">
+          <svg id="s3-diamond" width="118" height="118" viewBox="0 0 120 120" style="overflow:visible;">
+            <rect x="34" y="34" width="52" height="52" rx="8" transform="rotate(45 60 60)" fill="none" stroke="url(#gdi)" stroke-width="7" stroke-linecap="round"/>
+            <rect x="50" y="50" width="20" height="20" rx="4" transform="rotate(45 60 60)" fill="url(#gdi)"/>
+            <defs><linearGradient id="gdi" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFD27A"/><stop offset="1" stop-color="#8B7CF6"/></linearGradient></defs>
+          </svg>
+          <div class="display grad" id="s3-word" style="display:flex;">
+            <span class="char">K</span><span class="char">E</span><span class="char">Y</span><span class="char">F</span><span class="char">R</span><span class="char">A</span><span class="char">M</span><span class="char">E</span>
+          </div>
+        </div>
+        <div class="body" id="s3-tag" style="opacity:0;margin-top:2.2cqw;font-size:2.3cqw;color:#D8D2F6;">Script to screen, automatically.</div>
+      </div>
+    </div>
+
+    <!-- S4 WRITE (11.0–14.4) -->
+    <div class="clip" id="s4" data-start="11.0" data-duration="3.9" data-track-index="5" style="opacity:0;perspective:1600px;">
+      <div class="cam" id="s4-cam"><div class="glow" id="s4-glow" style="left:24%;top:26%;width:50cqw;height:34cqw;background:radial-gradient(circle, rgba(255,180,76,0.32), rgba(139,124,246,0.18) 46%, transparent 72%);"></div></div>
+      <div class="safe" style="align-items:flex-start;">
+        <div class="pill" id="s4-pill" style="opacity:0;"><span class="dot"></span>Step 01 — Write</div>
+        <h2 class="h2" id="s4-head" style="margin-top:1.6cqw;">You write the <span class="grad">script.</span></h2>
+        <div class="glass" id="s4-card" style="width:60cqw;margin-top:2cqw;padding:2cqw 2.4cqw;opacity:0;will-change:transform;">
+          <div class="mono">
+            <div class="s4-ln" style="opacity:0;"><span class="tok-mut">{</span></div>
+            <div class="s4-ln" style="opacity:0;">&nbsp;&nbsp;<span class="tok-key">"scene"</span><span class="tok-mut">:</span> <span class="tok-str">"hook"</span><span class="tok-mut">,</span></div>
+            <div class="s4-ln" style="opacity:0;">&nbsp;&nbsp;<span class="tok-key">"vo"</span><span class="tok-mut">:</span> <span class="tok-str">"Every video starts as a blank page."</span><span class="tok-mut">,</span></div>
+            <div class="s4-ln" style="opacity:0;">&nbsp;&nbsp;<span class="tok-key">"sfx"</span><span class="tok-mut">:</span> <span class="tok-str">"riser"</span><span class="caret" id="s4-caret" style="height:1.7cqw;"></span></div>
+            <div class="s4-ln" style="opacity:0;"><span class="tok-mut">}</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S5 COMPOSE (14.4–18.2) -->
+    <div class="clip" id="s5" data-start="14.4" data-duration="4.3" data-track-index="6" style="opacity:0;">
+      <div class="cam" id="s5-cam"><div class="glow" id="s5-glow" style="left:50%;top:48%;width:60cqw;height:44cqw;margin-left:-30cqw;margin-top:-22cqw;background:radial-gradient(circle, rgba(139,124,246,0.32), transparent 70%);"></div></div>
+      <div class="safe">
+        <div class="pill" id="s5-pill" style="opacity:0;margin-bottom:1.2cqw;"><span class="dot"></span>Step 02 — Compose</div>
+        <svg id="s5-graph" width="1120" height="520" viewBox="0 0 120 56" style="overflow:visible;max-width:78cqw;">
+          <g id="s5-edges" stroke="url(#ged)" stroke-width="0.5" fill="none" stroke-linecap="round">
+            <line class="s5-edge" x1="10" y1="28" x2="28" y2="15"/><line class="s5-edge" x1="10" y1="28" x2="28" y2="28"/><line class="s5-edge" x1="10" y1="28" x2="28" y2="41"/>
+            <line class="s5-edge" x1="28" y1="15" x2="50" y2="11"/><line class="s5-edge" x1="28" y1="28" x2="50" y2="24"/><line class="s5-edge" x1="28" y1="28" x2="50" y2="36"/><line class="s5-edge" x1="28" y1="41" x2="50" y2="45"/>
+            <line class="s5-edge" x1="50" y1="11" x2="74" y2="19"/><line class="s5-edge" x1="50" y1="24" x2="74" y2="19"/><line class="s5-edge" x1="50" y1="36" x2="74" y2="39"/><line class="s5-edge" x1="50" y1="45" x2="74" y2="39"/>
+            <line class="s5-edge" x1="74" y1="19" x2="96" y2="28"/><line class="s5-edge" x1="74" y1="39" x2="96" y2="28"/><line class="s5-edge" x1="96" y1="28" x2="112" y2="28"/>
+          </g>
+          <g id="s5-nodes" fill="#0A0912" stroke="url(#ged)" stroke-width="0.7">
+            <circle class="s5-node" cx="10" cy="28" r="2.6"/><circle class="s5-node" cx="28" cy="15" r="2.3"/><circle class="s5-node" cx="28" cy="28" r="2.3"/><circle class="s5-node" cx="28" cy="41" r="2.3"/>
+            <circle class="s5-node" cx="50" cy="11" r="2.3"/><circle class="s5-node" cx="50" cy="24" r="2.3"/><circle class="s5-node" cx="50" cy="36" r="2.3"/><circle class="s5-node" cx="50" cy="45" r="2.3"/>
+            <circle class="s5-node" cx="74" cy="19" r="2.3"/><circle class="s5-node" cx="74" cy="39" r="2.3"/><circle class="s5-node" cx="96" cy="28" r="2.6"/><circle class="s5-node" cx="112" cy="28" r="3.0" fill="url(#ged)"/>
+          </g>
+          <defs><linearGradient id="ged" x1="0" x2="1"><stop offset="0" stop-color="#FFB24C"/><stop offset="1" stop-color="#8B7CF6"/></linearGradient></defs>
+        </svg>
+        <div style="display:flex;align-items:baseline;gap:1cqw;margin-top:1cqw;">
+          <div class="display grad" id="s5-count" style="font-size:5.6cqw;">0</div>
+          <div class="h2" style="font-size:2.6cqw;color:var(--text);">agents compose every scene</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S6 RENDER (18.2–21.8) -->
+    <div class="clip" id="s6" data-start="18.2" data-duration="4.1" data-track-index="7" style="opacity:0;">
+      <div class="cam" id="s6-cam"><div class="glow" id="s6-glow" style="left:24%;top:24%;width:54cqw;height:36cqw;background:radial-gradient(circle, rgba(255,180,76,0.32), transparent 70%);"></div></div>
+      <div class="safe">
+        <div class="pill" id="s6-pill" style="opacity:0;margin-bottom:2cqw;"><span class="dot"></span>Step 03 — Render</div>
+        <div class="glass" id="s6-strip" style="width:72cqw;padding:1.6cqw;opacity:0;position:relative;">
+          <div style="display:flex;gap:0.7cqw;">
+            <div class="s6-cell" style="flex:1;height:8.5cqw;border-radius:0.7cqw;background:rgba(255,255,255,0.05);opacity:0;"></div>
+            <div class="s6-cell" style="flex:1;height:8.5cqw;border-radius:0.7cqw;background:rgba(255,255,255,0.05);opacity:0;"></div>
+            <div class="s6-cell" style="flex:1;height:8.5cqw;border-radius:0.7cqw;background:rgba(255,255,255,0.05);opacity:0;"></div>
+            <div class="s6-cell" style="flex:1;height:8.5cqw;border-radius:0.7cqw;background:rgba(255,255,255,0.05);opacity:0;"></div>
+            <div class="s6-cell" style="flex:1;height:8.5cqw;border-radius:0.7cqw;background:rgba(255,255,255,0.05);opacity:0;"></div>
+            <div class="s6-cell" style="flex:1;height:8.5cqw;border-radius:0.7cqw;background:rgba(255,255,255,0.05);opacity:0;"></div>
+            <div class="s6-cell" style="flex:1;height:8.5cqw;border-radius:0.7cqw;background:rgba(255,255,255,0.05);opacity:0;"></div>
+            <div class="s6-cell" style="flex:1;height:8.5cqw;border-radius:0.7cqw;background:rgba(255,255,255,0.05);opacity:0;"></div>
+            <div class="s6-cell" style="flex:1;height:8.5cqw;border-radius:0.7cqw;background:rgba(255,255,255,0.05);opacity:0;"></div>
+            <div class="s6-cell" style="flex:1;height:8.5cqw;border-radius:0.7cqw;background:rgba(255,255,255,0.05);opacity:0;"></div>
+          </div>
+          <div id="s6-playhead" style="position:absolute;top:-0.6cqw;left:1.6cqw;width:0.3cqw;height:calc(100% + 1.2cqw);background:var(--sun2);box-shadow:0 0 1.4cqw var(--sun2);border-radius:999px;"></div>
+        </div>
+        <div style="display:flex;align-items:baseline;gap:1.2cqw;margin-top:1.8cqw;">
+          <div class="display grad" id="s6-frames" style="font-size:4.6cqw;">0</div>
+          <div class="body" style="font-size:2cqw;color:#D8D2F6;">frames, deterministically — zero drift</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S7 PROOF (21.8–25.6) -->
+    <div class="clip" id="s7" data-start="21.8" data-duration="4.3" data-track-index="8" style="opacity:0;perspective:1600px;">
+      <div class="cam" id="s7-cam"><div class="glow" id="s7-glow" style="left:50%;top:50%;width:70cqw;height:34cqw;margin-left:-35cqw;margin-top:-17cqw;background:radial-gradient(circle, rgba(255,180,76,0.26), rgba(139,124,246,0.2) 46%, transparent 72%);"></div></div>
+      <div class="safe" style="flex-direction:row;gap:2.4cqw;">
+        <div class="glass s7-card" style="width:23cqw;height:23cqw;padding:2.2cqw;display:flex;flex-direction:column;justify-content:center;align-items:center;opacity:0;will-change:transform;">
+          <div class="stat-num grad" id="s7-n1">0</div><div class="body" style="margin-top:1cqw;max-width:100%;">agents on one graph</div>
+        </div>
+        <div class="glass s7-card" style="width:23cqw;height:23cqw;padding:2.2cqw;display:flex;flex-direction:column;justify-content:center;align-items:center;opacity:0;will-change:transform;">
+          <div style="display:flex;align-items:baseline;"><div class="stat-num grad" id="s7-n2">0</div><div class="stat-num grad" style="font-size:3cqw;">p</div></div>
+          <div class="body" style="margin-top:1cqw;max-width:100%;">at 30 frames per second</div>
+        </div>
+        <div class="glass s7-card" style="width:23cqw;height:23cqw;padding:2.2cqw;display:flex;flex-direction:column;justify-content:center;align-items:center;opacity:0;will-change:transform;">
+          <div style="display:flex;align-items:baseline;"><div class="stat-num grad" id="s7-n3">0</div><div class="stat-num grad" style="font-size:3cqw;">%</div></div>
+          <div class="body" style="margin-top:1cqw;max-width:100%;">deterministic frames</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S8 DIFFERENTIATOR (25.6–29.0) -->
+    <div class="clip" id="s8" data-start="25.6" data-duration="3.9" data-track-index="9" style="opacity:0;">
+      <div class="cam" id="s8-cam"><div class="glow" id="s8-glow" style="left:18%;top:30%;width:46cqw;height:34cqw;background:radial-gradient(circle, rgba(255,138,92,0.42), rgba(139,124,246,0.2) 45%, transparent 72%);"></div></div>
+      <div class="safe" style="align-items:flex-start;">
+        <div style="position:relative;"><h1 class="display" id="s8-l1" style="font-size:6cqw;opacity:0;">No editor.</h1><div class="strike" id="s8-strike1" style="opacity:0;"></div></div>
+        <div style="position:relative;margin-top:0.3cqw;"><h1 class="display" id="s8-l2" style="font-size:6cqw;opacity:0;">No timeline.</h1><div class="strike" id="s8-strike2" style="opacity:0;"></div></div>
+        <div style="position:relative;margin-top:0.3cqw;">
+          <h1 class="display grad" id="s8-l3" style="font-size:6cqw;opacity:0;">Just words.</h1>
+          <svg id="s8-underline" width="460" height="20" viewBox="0 0 460 20" style="position:absolute;left:0;bottom:-1cqw;overflow:visible;max-width:34cqw;">
+            <path d="M6 12 C 130 4, 330 4, 454 12" fill="none" stroke="url(#gu8)" stroke-width="6" stroke-linecap="round"/>
+            <defs><linearGradient id="gu8" x1="0" x2="1"><stop offset="0" stop-color="#FFB24C"/><stop offset="1" stop-color="#8B7CF6"/></linearGradient></defs>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- S9 CTA (29.0–33.0) -->
+    <div class="clip" id="s9" data-start="29.0" data-duration="4.0" data-track-index="10" style="opacity:0;">
+      <div class="cam" id="s9-cam"><div class="glow" id="s9-aura" style="left:50%;top:42%;width:64cqw;height:48cqw;margin-left:-32cqw;margin-top:-24cqw;background:radial-gradient(circle, rgba(255,180,76,0.45), rgba(139,124,246,0.28) 42%, transparent 70%);"></div></div>
+      <svg class="diamond" id="s9-d1" width="58" height="58" viewBox="0 0 60 60" style="left:25%;top:27%;opacity:0;"><rect x="16" y="16" width="28" height="28" rx="5" transform="rotate(45 30 30)" fill="none" stroke="#FFB24C" stroke-width="4"/></svg>
+      <svg class="diamond" id="s9-d2" width="42" height="42" viewBox="0 0 44 44" style="left:72%;top:64%;opacity:0;"><rect x="12" y="12" width="20" height="20" rx="4" transform="rotate(45 22 22)" fill="none" stroke="#8B7CF6" stroke-width="4"/></svg>
+      <div class="safe">
+        <div class="display grad" id="s9-mark" style="font-size:9.5cqw;opacity:0;">KEYFRAME</div>
+        <div class="body" id="s9-tag" style="opacity:0;margin-top:1.2cqw;font-size:2.4cqw;color:#D8D2F6;">Type a sentence. Get a film.</div>
+        <div class="cta" id="s9-cta" style="opacity:0;margin-top:2.8cqw;will-change:transform;">Start free <span style="font-weight:900;">&#8594;</span></div>
+      </div>
+    </div>
+
+    <!-- TRACK 20 — captions -->
+    <div id="caps" class="clip" data-start="0" data-duration="33" data-track-index="20"><div id="cap-pill"><div id="cap-text"></div></div></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
+  <script>
+  (function () {
+    if (typeof THREE === "undefined") { return; }
+    const W = 1920, H = 1080, canvas = document.getElementById("gl");
+    let renderer, scene, camera, group, pGold, pMoon, ico;
+    try {
+      renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+      renderer.setPixelRatio(1); renderer.setSize(W, H, false);
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(36, W / H, 0.1, 100); camera.position.set(0, 0, 6.2);
+      group = new THREE.Group(); scene.add(group);
+      function cloud(count, color, spread, size, seed) {
+        const g = new THREE.BufferGeometry(), pos = new Float32Array(count * 3);
+        let s = seed; const rnd = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+        for (let i = 0; i < count; i++) { pos[i*3] = (rnd()-0.5)*spread; pos[i*3+1] = (rnd()-0.5)*spread*0.62; pos[i*3+2] = (rnd()-0.5)*spread; }
+        g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+        return new THREE.Points(g, new THREE.PointsMaterial({ color, size, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false }));
+      }
+      pGold = cloud(170, 0xFFB24C, 11, 0.045, 7919); pMoon = cloud(210, 0x8B7CF6, 12, 0.05, 104729);
+      group.add(pGold); group.add(pMoon);
+      ico = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.IcosahedronGeometry(2.4, 1)), new THREE.LineBasicMaterial({ color: 0x6D5BD0, transparent: true, opacity: 0.22 }));
+      group.add(ico);
+    } catch (e) { renderer = null; }
+    function renderAt(t) {
+      if (!renderer) return;
+      const k = Math.min(1, Math.max(0, t / 33));
+      group.rotation.y = t * 0.075; group.rotation.x = Math.sin(t * 0.18) * 0.12; ico.rotation.z = t * 0.04;
+      pGold.material.opacity = 0.55 + 0.25 * Math.sin(t * 0.9); pMoon.material.opacity = 0.55 + 0.25 * Math.sin(t * 0.9 + 1.6);
+      camera.position.z = 6.2 - k * 0.9; camera.position.x = Math.sin(t * 0.1) * 0.25; camera.lookAt(0, 0, 0);
+      renderer.render(scene, camera);
+    }
+    window.addEventListener("hf-seek", (e) => renderAt(e.detail.time));
+    renderAt(window.__hfThreeTime || 0);
+  })();
+  </script>
+
+  <script>
+    const D = 33;
+    const tl = gsap.timeline({ paused: true });
+    gsap.set(".s5-edge", { strokeDasharray: 100, strokeDashoffset: 100 });
+    gsap.set("#s8-underline path", { strokeDasharray: 600, strokeDashoffset: 600 });
+    const $ = (s) => document.querySelector(s);
+    const reps = (total, cyc) => Math.max(0, Math.floor(total / cyc) - 1);
+    function kill(id, t) { tl.set(id, { opacity: 0 }, t); }
+    function count(sel, to, at, dur) { const o = { v: 0 }; tl.to(o, { v: to, duration: dur, ease: "power2.out", snap: { v: 1 }, onUpdate() { const e = $(sel); if (e) e.textContent = Math.round(o.v); } }, at); }
+    function type(sel, str, at, dur) { const o = { n: 0 }; tl.to(o, { n: str.length, duration: dur, ease: "none", snap: { n: 1 }, onUpdate() { const e = $(sel); if (e) e.textContent = str.slice(0, Math.round(o.n)); } }, at); }
+
+    /* AMBIENT (always-on, finite repeats) */
+    tl.to("#sun-blob",  { xPercent: 12, yPercent: 10, scale: 1.12, duration: 11, ease: "sine.inOut", yoyo: true, repeat: reps(D, 11) }, 0);
+    tl.to("#moon-blob", { xPercent: -10, yPercent: -8, scale: 1.15, duration: 9, ease: "sine.inOut", yoyo: true, repeat: reps(D, 9) }, 0);
+    tl.to(".bokeh", { yPercent: -22, duration: 8, ease: "sine.inOut", yoyo: true, repeat: reps(D, 8), stagger: { each: 0.7, from: "random" } }, 0);
+    tl.fromTo("#ambient", { opacity: 0 }, { opacity: 1, duration: 1.0 }, 0);
+
+    /* S1 */
+    tl.fromTo("#s1", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 0);
+    tl.fromTo("#s1-cam", { scale: 1.0 }, { scale: 1.1, duration: 3.9, ease: "sine.inOut" }, 0);
+    tl.fromTo("#s1-glow", { opacity: 0, scale: 0.85 }, { opacity: 0.7, scale: 1, duration: 0.9 }, 0.2);
+    tl.fromTo("#s1-editor", { opacity: 0, y: 26, filter: "blur(8px)" }, { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.6, ease: "power3.out" }, 0.15);
+    type("#s1-type", "Every video starts as a blank page.", 0.5, 1.6);
+    tl.to("#s1-caret", { opacity: 0, duration: 0.18, yoyo: true, repeat: reps(2.6, 0.4) }, 0.6);
+    tl.fromTo("#s1 .word", { yPercent: 110, opacity: 0, filter: "blur(6px)" }, { yPercent: 0, opacity: 1, filter: "blur(0px)", duration: 0.6, ease: "power3.out", stagger: 0.07 }, 1.7);
+    tl.to("#s1 .safe", { opacity: 0, duration: 0.45, ease: "power2.in" }, 3.05);
+    tl.to("#s1", { opacity: 0, duration: 0.45, ease: "power2.in" }, 3.05);
+    kill("#s1", 3.85);
+
+    /* S2 */
+    tl.fromTo("#s2", { opacity: 0 }, { opacity: 1, duration: 0.35 }, 3.4);
+    tl.fromTo("#s2-cam", { scale: 1.0, xPercent: 0 }, { scale: 1.09, xPercent: 3, duration: 4.1, ease: "sine.inOut" }, 3.4);
+    tl.fromTo("#s2-glow", { opacity: 0 }, { opacity: 0.55, duration: 0.8 }, 3.5);
+    tl.fromTo("#s2-l1", { yPercent: 115 }, { yPercent: 0, duration: 0.7, ease: "power4.out" }, 3.7);
+    tl.fromTo("#s2 #s2-em", { yPercent: 115 }, { yPercent: 0, duration: 0.7, ease: "power4.out" }, 3.9);
+    tl.fromTo("#s2-em", { backgroundPosition: "120% 0" }, { backgroundPosition: "0% 0", duration: 0.8, ease: "power2.out" }, 4.6);
+    tl.fromTo("#s2-sweep", { opacity: 0, left: "-20%" }, { opacity: 1, left: "90%", duration: 1.1, ease: "power1.inOut" }, 4.4);
+    tl.to("#s2-sweep", { opacity: 0, duration: 0.3 }, 5.5);
+    tl.to("#s2", { opacity: 0, duration: 0.45, ease: "power2.in" }, 6.65);
+    kill("#s2", 7.45);
+
+    /* S3 REVEAL */
+    tl.fromTo("#s3", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 7.0);
+    tl.fromTo("#s3-cam", { scale: 1.14 }, { scale: 1.0, duration: 4.5, ease: "sine.inOut" }, 7.0);
+    tl.fromTo("#s3-burst", { opacity: 0, scale: 0.4 }, { opacity: 0.85, scale: 1, duration: 0.7, ease: "power2.out" }, 7.1);
+    tl.to("#s3-burst", { opacity: 0.3, duration: 1.6, ease: "sine.inOut" }, 7.8);
+    tl.fromTo("#s3-mark", { rotationY: 38, z: -160, opacity: 0 }, { rotationY: 0, z: 0, opacity: 1, duration: 0.9, ease: "expo.out" }, 7.2);
+    tl.fromTo("#s3-word .char", { yPercent: 120, opacity: 0, rotationX: -80 }, { yPercent: 0, opacity: 1, rotationX: 0, duration: 0.7, ease: "back.out(1.6)", stagger: 0.05 }, 7.4);
+    tl.fromTo("#s3-diamond", { scale: 0, rotation: -90, opacity: 0 }, { scale: 1, rotation: 0, opacity: 1, duration: 0.8, ease: "back.out(1.7)" }, 7.3);
+    tl.to("#s3-diamond", { rotation: 360, duration: 6, ease: "none" }, 8.1);
+    tl.fromTo("#s3-pill", { opacity: 0, y: -20 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 7.2);
+    tl.fromTo("#s3-tag", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.6, ease: "power2.out" }, 8.4);
+    tl.to("#s3", { opacity: 0, duration: 0.5, ease: "power2.in" }, 10.6);
+    kill("#s3", 11.5);
+
+    /* S4 WRITE */
+    tl.fromTo("#s4", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 11.0);
+    tl.fromTo("#s4-cam", { scale: 1.0 }, { scale: 1.08, duration: 3.9, ease: "sine.inOut" }, 11.0);
+    tl.fromTo("#s4-glow", { opacity: 0, scale: 0.85 }, { opacity: 1, scale: 1, duration: 0.7 }, 11.4);
+    tl.fromTo("#s4-pill", { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: 0.5, ease: "power2.out" }, 11.1);
+    tl.fromTo("#s4-head", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.55, ease: "power3.out" }, 11.25);
+    tl.fromTo("#s4-card", { opacity: 0, y: 60, rotationX: 22 }, { opacity: 1, y: 0, rotationX: 0, duration: 0.7, ease: "expo.out" }, 11.4);
+    tl.fromTo("#s4 .s4-ln", { opacity: 0, x: -16 }, { opacity: 1, x: 0, duration: 0.32, ease: "power2.out", stagger: 0.16 }, 11.7);
+    tl.to("#s4-caret", { opacity: 0, duration: 0.18, ease: "none", yoyo: true, repeat: reps(2.2, 0.42) }, 12.2);
+    tl.to("#s4", { opacity: 0, duration: 0.5, ease: "power2.in" }, 14.0);
+    kill("#s4", 14.85);
+
+    /* S5 COMPOSE */
+    tl.fromTo("#s5", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 14.4);
+    tl.fromTo("#s5-cam", { scale: 1.0 }, { scale: 1.08, duration: 4.3, ease: "sine.inOut" }, 14.4);
+    tl.fromTo("#s5-glow", { opacity: 0 }, { opacity: 0.6, duration: 0.8 }, 14.5);
+    tl.fromTo("#s5-pill", { opacity: 0, y: -18 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 14.5);
+    tl.to(".s5-edge", { strokeDashoffset: 0, duration: 0.55, ease: "power2.out", stagger: 0.05 }, 14.7);
+    tl.fromTo(".s5-node", { scale: 0, opacity: 0, transformOrigin: "center center" }, { scale: 1, opacity: 1, duration: 0.4, ease: "back.out(1.8)", stagger: 0.06 }, 15.0);
+    tl.fromTo(".s5-node", { filter: "drop-shadow(0 0 0 rgba(255,180,76,0))" }, { filter: "drop-shadow(0 0 7px rgba(255,180,76,0.8))", duration: 0.7, ease: "sine.inOut", yoyo: true, repeat: 1, stagger: 0.05 }, 15.4);
+    count("#s5-count", 12, 15.2, 1.1);
+    tl.to("#s5", { opacity: 0, duration: 0.5, ease: "power2.in" }, 17.8);
+    kill("#s5", 18.65);
+
+    /* S6 RENDER */
+    tl.fromTo("#s6", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 18.2);
+    tl.fromTo("#s6-cam", { scale: 1.0 }, { scale: 1.08, duration: 4.1, ease: "sine.inOut" }, 18.2);
+    tl.fromTo("#s6-glow", { opacity: 0 }, { opacity: 0.55, duration: 0.8 }, 18.3);
+    tl.fromTo("#s6-pill", { opacity: 0, y: -18 }, { opacity: 1, y: 0, duration: 0.45, ease: "power2.out" }, 18.3);
+    tl.fromTo("#s6-strip", { opacity: 0, y: 36 }, { opacity: 1, y: 0, duration: 0.55, ease: "power3.out" }, 18.4);
+    tl.fromTo(".s6-cell", { opacity: 0 }, { opacity: 1, duration: 0.18, ease: "power1.out", stagger: 0.11 }, 18.8);
+    tl.fromTo("#s6-playhead", { left: "1.6cqw" }, { left: "70cqw", duration: 1.5, ease: "power1.inOut" }, 18.8);
+    count("#s6-frames", 990, 18.9, 1.7);
+    tl.to("#s6", { opacity: 0, duration: 0.5, ease: "power2.in" }, 21.4);
+    kill("#s6", 22.25);
+
+    /* S7 PROOF */
+    tl.fromTo("#s7", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 21.8);
+    tl.fromTo("#s7-cam", { scale: 1.1 }, { scale: 1.0, duration: 4.3, ease: "sine.inOut" }, 21.8);
+    tl.fromTo("#s7-glow", { opacity: 0, scale: 0.8 }, { opacity: 0.7, scale: 1, duration: 0.7 }, 21.9);
+    tl.fromTo(".s7-card", { opacity: 0, y: 56, rotationY: 26 }, { opacity: 1, y: 0, rotationY: 0, duration: 0.7, ease: "expo.out", stagger: 0.16 }, 21.9);
+    count("#s7-n1", 12, 22.2, 1.0);
+    count("#s7-n2", 1080, 22.36, 1.2);
+    count("#s7-n3", 100, 22.52, 1.2);
+    tl.to(".s7-card", { y: -14, duration: 1.2, ease: "sine.inOut", yoyo: true, repeat: 1, stagger: 0.1 }, 23.4);
+    tl.to("#s7", { opacity: 0, duration: 0.5, ease: "power2.in" }, 25.2);
+    kill("#s7", 26.1);
+
+    /* S8 DIFFERENTIATOR */
+    tl.fromTo("#s8", { opacity: 0 }, { opacity: 1, duration: 0.35 }, 25.6);
+    tl.fromTo("#s8-cam", { scale: 1.0, xPercent: 0 }, { scale: 1.09, xPercent: -3, duration: 3.9, ease: "sine.inOut" }, 25.6);
+    tl.fromTo("#s8-glow", { opacity: 0, scale: 0.8 }, { opacity: 0.9, scale: 1, duration: 0.7 }, 25.8);
+    tl.fromTo("#s8-l1", { opacity: 0, x: -40 }, { opacity: 1, x: 0, duration: 0.5, ease: "power3.out" }, 25.7);
+    tl.fromTo("#s8-strike1", { opacity: 1, scaleX: 0 }, { scaleX: 1, duration: 0.4, ease: "power3.inOut" }, 26.1);
+    tl.fromTo("#s8-l2", { opacity: 0, x: -40 }, { opacity: 1, x: 0, duration: 0.5, ease: "power3.out" }, 26.3);
+    tl.fromTo("#s8-strike2", { opacity: 1, scaleX: 0 }, { scaleX: 1, duration: 0.4, ease: "power3.inOut" }, 26.7);
+    tl.to(["#s8-l1", "#s8-strike1", "#s8-l2", "#s8-strike2"], { opacity: 0.28, duration: 0.4, ease: "power2.out" }, 27.2);
+    tl.fromTo("#s8-l3", { opacity: 0, scale: 0.8, y: 20 }, { opacity: 1, scale: 1, y: 0, duration: 0.6, ease: "back.out(1.5)" }, 27.3);
+    tl.to("#s8-underline path", { strokeDashoffset: 0, duration: 0.6, ease: "power2.out" }, 27.9);
+    tl.to("#s8", { opacity: 0, duration: 0.5, ease: "power2.in" }, 28.6);
+    kill("#s8", 29.5);
+
+    /* S9 CTA */
+    tl.fromTo("#s9", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 29.0);
+    tl.fromTo("#s9-cam", { scale: 1.0 }, { scale: 1.07, duration: 4.0, ease: "sine.inOut" }, 29.0);
+    tl.fromTo("#s9-aura", { opacity: 0, scale: 0.7 }, { opacity: 0.85, scale: 1, duration: 0.7, ease: "power2.out" }, 29.1);
+    tl.to("#s9-aura", { scale: 1.08, opacity: 0.55, duration: 1.4, ease: "sine.inOut", yoyo: true, repeat: 1, overwrite: "auto" }, 29.95);
+    tl.fromTo("#s9-mark", { opacity: 0, scale: 0.7, filter: "blur(10px)" }, { opacity: 1, scale: 1, filter: "blur(0px)", duration: 0.7, ease: "expo.out" }, 29.25);
+    tl.fromTo("#s9-tag", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.55, ease: "power2.out" }, 29.9);
+    tl.fromTo("#s9-cta", { opacity: 0, scale: 0.6 }, { opacity: 1, scale: 1, duration: 0.55, ease: "back.out(1.6)" }, 30.2);
+    tl.to("#s9-cta", { scale: 1.08, duration: 0.55, ease: "sine.inOut", yoyo: true, repeat: 2 }, 30.9);
+    tl.fromTo("#s9-d1", { opacity: 0, scale: 0, rotation: -60 }, { opacity: 0.9, scale: 1, rotation: 0, duration: 0.6, ease: "back.out(1.7)" }, 30.0);
+    tl.fromTo("#s9-d2", { opacity: 0, scale: 0, rotation: 60 }, { opacity: 0.9, scale: 1, rotation: 0, duration: 0.6, ease: "back.out(1.7)" }, 30.3);
+    tl.to(["#s9-d1", "#s9-d2"], { y: -16, duration: 1.4, ease: "sine.inOut", yoyo: true, repeat: 1 }, 31.0);
+
+    /* CAPTIONS */
+    const cues = [
+      { s: 0.15, e: 3.3,  t: "Every great video still starts as a blank page." },
+      { s: 3.5,  e: 6.9,  t: "What if the page could direct itself?" },
+      { s: 7.1,  e: 10.9, t: "Meet KEYFRAME. Your script becomes a film, automatically." },
+      { s: 11.1, e: 14.3, t: "You write the script. That's the entire job." },
+      { s: 14.5, e: 18.1, t: "Twelve agents storyboard, design, and compose every scene." },
+      { s: 18.3, e: 21.7, t: "Then every frame renders, deterministically. Zero drift." },
+      { s: 21.9, e: 25.5, t: "One prompt in. A finished, polished film out." },
+      { s: 25.7, e: 28.9, t: "No editor. No timeline. Just your words." },
+      { s: 29.1, e: 32.8, t: "KEYFRAME. Type a script. Get a film." }
+    ];
+    cues.forEach((c) => { tl.set("#cap-text", { textContent: c.t }, c.s); tl.set("#cap-pill", { opacity: 1 }, c.s); tl.set("#cap-pill", { opacity: 0 }, c.e); });
+
+    window.__timelines = window.__timelines || {};
+    window.__timelines["vid"] = tl;
+  </script>
+</body>
+</html>

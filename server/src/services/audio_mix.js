@@ -63,44 +63,85 @@ async function mix({
 
   if (ttsPath) {
     inputs.push("-i", ttsPath);
-    layers.push({ kind: "tts", idx: nextIdx++, volume: 1.0 });
+    layers.push({ kind: "tts", idx: nextIdx++, volume: 1.0, delayMs: 0 });
   }
+  // Music is handled separately (fade + sidechain ducking), NOT as a flat layer.
+  let musicLayer = null;
   if (musicPath) {
-    // Loop music so short clips cover the whole duration.
-    inputs.push("-stream_loop", "-1", "-i", musicPath);
-    layers.push({ kind: "music", idx: nextIdx++, volume: musicVolume });
+    inputs.push("-stream_loop", "-1", "-i", musicPath); // loop so short clips cover full duration
+    musicLayer = { idx: nextIdx++, volume: musicVolume };
   }
   for (const s of sfx) {
     if (!s.path) continue;
     inputs.push("-i", s.path);
     layers.push({
-      kind: "sfx",
+      // Voiceover clips arrive tagged kind:"vo" so the mixer can duck music
+      // under speech; everything else defaults to sfx.
+      kind: s.kind || "sfx",
       idx: nextIdx++,
       volume: s.volume ?? 0.5,
       delayMs: Math.max(0, Math.round((s.startSec || 0) * 1000)),
     });
   }
 
-  if (layers.length === 0) {
+  if (layers.length === 0 && !musicLayer) {
     log("no audio layers — returning original video");
     if (videoPath !== outputPath) fs.copyFileSync(videoPath, outputPath);
     return outputPath;
   }
 
-  // Filter graph: silent track first, then each layer volumed + delayed.
+  // Voice = TTS + VO clips; these key the music ducking AND mix into the output.
+  const voiceLayers = layers.filter((l) => l.kind === "vo" || l.kind === "tts");
+  const duck = !!musicLayer && voiceLayers.length > 0;
+
+  // Filter graph: silent anchor first, then each layer volumed + delayed.
   const parts = [`[${silenceIdx}:a]anull[silence]`];
   const mixInputs = [`[silence]`];
+  const keyLabels = []; // VO copies that drive the sidechain key bus
+
   for (const l of layers) {
     const label = `a${l.idx}`;
-    if (l.kind === "sfx" && l.delayMs > 0) {
-      parts.push(`[${l.idx}:a]adelay=${l.delayMs}|${l.delayMs},volume=${l.volume}[${label}]`);
+    const chain = l.delayMs > 0
+      ? `adelay=${l.delayMs}|${l.delayMs},volume=${l.volume}`
+      : `volume=${l.volume}`;
+    const isVoice = l.kind === "vo" || l.kind === "tts";
+    if (duck && isVoice) {
+      // Split each VO: one copy to the final mix, one to the duck key.
+      parts.push(`[${l.idx}:a]${chain},aresample=44100,asplit=2[${label}m][${label}k]`);
+      mixInputs.push(`[${label}m]`);
+      keyLabels.push(`[${label}k]`);
     } else {
-      parts.push(`[${l.idx}:a]volume=${l.volume}[${label}]`);
+      parts.push(`[${l.idx}:a]${chain}[${label}]`);
+      mixInputs.push(`[${label}]`);
     }
-    mixInputs.push(`[${label}]`);
   }
+
+  if (musicLayer) {
+    // Fade in/out so music never starts or ends abruptly. atrim gives the
+    // afade-out a defined endpoint on the infinite stream_loop input.
+    const fadeOutStart = Math.max(0, durationSec - 1.2);
+    const fadeInDur = Math.min(0.8, durationSec);
+    const fadeOutDur = Math.min(1.2, durationSec);
+    parts.push(
+      `[${musicLayer.idx}:a]atrim=0:${durationSec},volume=${musicLayer.volume},` +
+      `afade=t=in:st=0:d=${fadeInDur},afade=t=out:st=${fadeOutStart}:d=${fadeOutDur},aresample=44100[muspre]`
+    );
+    if (duck) {
+      // Build the VO key bus, then duck music under speech (sidechain compressor).
+      if (keyLabels.length === 1) {
+        parts.push(`${keyLabels[0]}aresample=44100[vokey]`);
+      } else {
+        parts.push(`${keyLabels.join("")}amix=inputs=${keyLabels.length}:duration=longest:normalize=0,aresample=44100[vokey]`);
+      }
+      parts.push(`[muspre][vokey]sidechaincompress=threshold=0.03:ratio=8:attack=20:release=400[musfinal]`);
+    } else {
+      parts.push(`[muspre]anull[musfinal]`);
+    }
+    mixInputs.push(`[musfinal]`);
+  }
+
   // duration=first anchors to the silent track (full video length).
-  parts.push(`${mixInputs.join("")}amix=inputs=${layers.length + 1}:duration=first:normalize=0[aout]`);
+  parts.push(`${mixInputs.join("")}amix=inputs=${mixInputs.length}:duration=first:normalize=0[aout]`);
   const filter = parts.join(";");
 
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
