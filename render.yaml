@@ -1,0 +1,49 @@
+# KEYFRAME backend — Render Blueprint (https://render.com/docs/blueprint-spec)
+# Create the service: Render Dashboard → New → Blueprint → pick this repo.
+#
+# ⚠️ PLAN / RAM: rendering launches Chromium (~1.5–2 GB peak). The FREE plan
+#    (512 MB) deploys and serves the API/UI but video renders will OOM-crash.
+#    To actually generate videos, use `plan: standard` (2 GB) or higher.
+#
+# Secrets (sync: false) are NOT stored in git — set them in the Render dashboard
+# after the first deploy. `config.json` is gitignored, so the app falls back to
+# config.example.json and reads keys from these env vars (see src/config.js).
+services:
+  - type: web
+    name: keyframe-backend
+    runtime: docker
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: ./server
+    plan: free                 # change to `standard` to actually render videos
+    region: oregon
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=2048
+      - key: PUPPETEER_EXECUTABLE_PATH
+        value: /usr/bin/chromium
+      - key: PUPPETEER_SKIP_DOWNLOAD
+        value: "true"
+      - key: JOB_CONCURRENCY
+        value: "1"
+      - key: RENDER_WORKERS
+        value: "1"
+      - key: RENDER_QUALITY
+        value: draft
+      - key: MEDIA_PROVIDER
+        value: pixabay-api
+      # Lock CORS to your Vercel URL once you have it (e.g. https://keyframe.vercel.app).
+      - key: WEB_ORIGIN
+        sync: false
+      # ── Secret API keys — set these in the Render dashboard ──
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: KIE_API_KEY
+        sync: false
+      - key: PIXABAY_API_KEY
+        sync: false
+      - key: FREESOUND_TOKEN
+        sync: false

@@ -64,6 +64,26 @@ async function main() {
   const app = express();
   app.disable("x-powered-by");
   app.set("trust proxy", true);
+
+  // CORS — for split deploys the frontend (e.g. Vercel) is a different origin
+  // than this API (e.g. Render). WEB_ORIGIN is a comma-separated allowlist of
+  // permitted origins; if unset, any origin is allowed (the API is keyless,
+  // read + create only, no cookies). Same-origin all-in-one deploys never hit this.
+  const corsAllow = (process.env.WEB_ORIGIN || "")
+    .split(",").map((s) => s.trim()).filter(Boolean);
+  app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin && (corsAllow.length === 0 || corsAllow.includes(origin))) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Vary", "Origin");
+      res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+      res.setHeader("Access-Control-Max-Age", "86400");
+    }
+    if (req.method === "OPTIONS") return res.sendStatus(204);
+    next();
+  });
+
   app.use(express.json({ limit: "64kb" }));
 
   app.use(healthRouter);

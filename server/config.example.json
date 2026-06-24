@@ -1,0 +1,102 @@
+{
+  "server": {
+    "port": 8080,
+    "maxDurationSec": 150,
+    "minDurationSec": 5,
+    "rateLimitPerHourPerIp": 5,
+    "dailyJobCap": 100,
+    "videoTtlHours": 24,
+    "renderQuality": "high",
+    "watchdogMultiplier": 30,
+    "watchdogBufferSec": 300,
+    "watchdogMinSec": 900,
+    "maxStorageMb": 500,
+    "stageBudgetSec": 1200,
+    "jobConcurrency": 2,
+    "renderWorkers": 1
+  },
+  "llm": {
+    "provider": "openrouter",
+    "model":         "google/gemini-2.5-flash-lite",
+    "modelFast":     "google/gemini-2.5-flash-lite",
+    "modelFallback": "google/gemini-2.5-flash",
+    "stageModels": {
+      "storyboard":   "default",
+      "composer":     "anthropic/claude-opus-4.8",
+      "assetPlanner": "default",
+      "audioPlanner": "default"
+    },
+    "baseUrl": "https://openrouter.ai/api/v1",
+    "apiKey": "",
+    "maxTokens": {
+      "default": 12288,
+      "composer": 40960,
+      "storyboard": 16384
+    },
+    "storyboardMaxRetries": 1,
+    "composerMaxRetries": 1,
+    "composerLintRepairs": 2,
+    "temperature": 0.7,
+    "temperatureByStage": {
+      "composer": 0.2
+    },
+    "requestTimeoutMs": 180000,
+    "requestTimeoutByStage": { "composer": 300000 },
+    "httpReferer": "https://video-gen.local",
+    "xTitle": "video-gen"
+  },
+  "orientations": {
+    "horizontal": { "aspectRatio": "16:9" },
+    "vertical":   { "aspectRatio": "9:16" },
+    "square":     { "aspectRatio": "1:1" }
+  },
+  "qualities": {
+    "480p":  { "short": 480,  "long": 854 },
+    "720p":  { "short": 720,  "long": 1280 },
+    "1080p": { "short": 1080, "long": 1920 }
+  },
+  "audio": {
+    "pixabayKey": "",
+    "freesoundToken": "",
+    "ttsModel": "openai/gpt-audio-mini",
+    "defaultMusicVolume": 0.22
+  },
+  "defaults": {
+    "orientation": "horizontal",
+    "quality": "1080p",
+    "fps": 30
+  },
+  "allowedFps": [24, 30, 60],
+  "frames": {
+    "dir": "../frames",
+    "defaultPack": "blockframe"
+  },
+  "render": {
+    "hyperframesVersion": "0.6.120"
+  },
+  "orchestrator": "langgraph",
+  "qa": {
+    "enabled": true,
+    "maxRepairs": 2
+  },
+  "stt": {
+    "provider": "local",
+    "localModel": "small",
+    "pythonBin": "python"
+  },
+  "assetProviders": {
+    "order": ["pixabay", "openverse", "pexels", "pixabay_scrape"],
+    "pixabay": { "apiKey": "" },
+    "pexels":  { "apiKey": "" }
+  },
+  "ingest": {
+    "maxUploadMb": 200,
+    "websiteTimeoutMs": 60000
+  },
+  "paths": {
+    "jobsDir": "jobs",
+    "videosDir": "public/videos",
+    "uploadsDir": "uploads",
+    "dbFile": "jobs.json"
+  }
+}

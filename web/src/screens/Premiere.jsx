@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { getProject } from "../api.js";
+import { getProject, mediaUrl } from "../api.js";
 
 // The reveal: player with a curtain animation on first load, downloads,
 // remix, and the cost/timing/attribution breakdown.
@@ -39,7 +39,7 @@ export default function Premiere({ projectId, onRemix, onNew }) {
       <div className="relative mt-6 rounded-2xl overflow-hidden border border-line bg-black shadow-[0_24px_60px_rgba(8,10,24,0.45)]">
         {project.videoUrl ? (
           <>
-            <video src={project.videoUrl} controls className="w-full aspect-video" />
+            <video src={mediaUrl(project.videoUrl)} controls className="w-full aspect-video" />
             {/* Curtain reveal on mount — midnight curtain for the premiere */}
             <motion.div initial={{ scaleY: 1 }} animate={{ scaleY: 0 }}
               transition={{ duration: 1.1, ease: [0.83, 0, 0.17, 1], delay: 0.35 }}
@@ -55,12 +55,12 @@ export default function Premiere({ projectId, onRemix, onNew }) {
 
       <div className="mt-6 flex flex-wrap gap-3">
         {project.videoUrl && (
-          <a href={project.videoUrl} download className="btn-solstice uppercase text-xs">
+          <a href={mediaUrl(project.videoUrl)} download className="btn-solstice uppercase text-xs">
             Download MP4
           </a>
         )}
         {project.srtUrl && (
-          <a href={project.srtUrl} download
+          <a href={mediaUrl(project.srtUrl)} download
             className="px-6 py-3 rounded-xl border border-line text-xs uppercase tracking-widest hover:border-accent transition-colors">
             Captions .srt
           </a>

@@ -1,5 +1,15 @@
-// KEYFRAME API client. Same-origin in production (served by Express);
-// the vite dev server proxies /api and /videos to :8080.
+// KEYFRAME API client.
+// - Same-origin when VITE_API_URL is unset (all-in-one host / vite dev proxy).
+// - Split deploy (frontend on Vercel, backend on Render): set VITE_API_URL at
+//   build time to the backend origin; all /api + media URLs are prefixed with it.
+export const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
+
+// Prefix a backend-relative URL ("/videos/x.mp4", "/frames/...", "/showcase.mp4")
+// with the API origin. Absolute URLs and falsy values pass through untouched.
+export const mediaUrl = (u) =>
+  typeof u === "string" && u.startsWith("/") ? API_BASE + u : u;
+
+const apiFetch = (path, opts) => fetch(API_BASE + path, opts);
 
 async function json(resp) {
   const body = await resp.json().catch(() => ({}));
@@ -20,9 +30,9 @@ export async function createProject(fields) {
     for (const [k, v] of Object.entries(rest)) {
       if (v != null && v !== "") form.append(k, String(v));
     }
-    return json(await fetch("/api/projects", { method: "POST", body: form }));
+    return json(await apiFetch("/api/projects", { method: "POST", body: form }));
   }
-  return json(await fetch("/api/projects", {
+  return json(await apiFetch("/api/projects", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(rest),
@@ -30,11 +40,11 @@ export async function createProject(fields) {
 }
 
 export async function getProject(id) {
-  return json(await fetch(`/api/projects/${id}`));
+  return json(await apiFetch(`/api/projects/${id}`));
 }
 
 export async function approveProject(id, script) {
-  return json(await fetch(`/api/projects/${id}/approve`, {
+  return json(await apiFetch(`/api/projects/${id}/approve`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(script ? { script } : {}),
@@ -42,7 +52,7 @@ export async function approveProject(id, script) {
 }
 
 export async function regenerateProject(id, from = "script") {
-  return json(await fetch(`/api/projects/${id}/regenerate`, {
+  return json(await apiFetch(`/api/projects/${id}/regenerate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ from }),
@@ -50,7 +60,7 @@ export async function regenerateProject(id, from = "script") {
 }
 
 export async function listFrames() {
-  return json(await fetch("/api/frames"));
+  return json(await apiFetch("/api/frames"));
 }
 
 // Poll a project until `predicate(project)` is true (or a terminal status).

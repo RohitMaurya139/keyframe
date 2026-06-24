@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
+import { API_BASE, mediaUrl } from "../api.js";
 
 // A muted/looped preview that only plays while it's on screen (saves battery
 // and bandwidth) and falls back to its poster when paused or unsupported.
@@ -39,13 +40,13 @@ export default function Gallery({ onOpen }) {
   const [packs, setPacks] = useState(null);
 
   useEffect(() => {
-    fetch("/api/projects")
+    fetch(`${API_BASE}/api/projects`)
       .then((r) => r.json())
       .then((d) => setProjects((d.projects || []).filter((p) => p.videoUrl)))
       .catch(() => setProjects([]));
 
     // Seed: the page is NEVER empty — featured looks always render.
-    fetch("/api/frames")
+    fetch(`${API_BASE}/api/frames`)
       .then((r) => r.json())
       .then((d) => setPacks((d.packs || []).filter((p) => p.previewUrl)))
       .catch(() => setPacks([]));
@@ -76,8 +77,8 @@ export default function Gallery({ onOpen }) {
               >
                 <div className="aspect-video bg-black relative overflow-hidden rounded-t-[21px]">
                   <PreviewVideo
-                    src={p.previewUrl}
-                    poster={p.posterUrl}
+                    src={mediaUrl(p.previewUrl)}
+                    poster={mediaUrl(p.posterUrl)}
                     className="w-full h-full object-cover"
                   />
                 </div>
@@ -119,8 +120,8 @@ export default function Gallery({ onOpen }) {
                 <div className="aspect-video bg-black relative overflow-hidden rounded-t-[21px]">
                   {/* Hover-scrub: muted autoplay on hover */}
                   <video
-                    src={p.videoUrl}
-                    poster={p.videoUrl.replace(/\.mp4$/, ".jpg")}
+                    src={mediaUrl(p.videoUrl)}
+                    poster={mediaUrl(p.videoUrl.replace(/\.mp4$/, ".jpg"))}
                     muted
                     loop
                     playsInline

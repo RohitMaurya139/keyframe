@@ -5,6 +5,10 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const CONFIG_PATH = path.resolve(__dirname, "..", "config.json");
+// Fresh deploys (Render/Oracle clone from git) have no config.json — it's
+// gitignored because it can hold inline keys. Fall back to the committed
+// config.example.json; real secrets are injected from env below either way.
+const CONFIG_EXAMPLE_PATH = path.resolve(__dirname, "..", "config.example.json");
 const ENV_PATH = path.resolve(__dirname, "..", ".env");
 
 // Load server/.env into process.env BEFORE anything reads keys, so API keys can
@@ -28,13 +32,16 @@ const ENV_PATH = path.resolve(__dirname, "..", ".env");
 })();
 
 function loadRaw() {
-  if (!fs.existsSync(CONFIG_PATH)) {
-    throw new Error(`config.json not found at ${CONFIG_PATH}`);
+  const src = fs.existsSync(CONFIG_PATH) ? CONFIG_PATH
+            : fs.existsSync(CONFIG_EXAMPLE_PATH) ? CONFIG_EXAMPLE_PATH
+            : null;
+  if (!src) {
+    throw new Error(`no config found (looked for ${CONFIG_PATH} and ${CONFIG_EXAMPLE_PATH})`);
   }
   try {
-    return JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
+    return JSON.parse(fs.readFileSync(src, "utf8"));
   } catch (e) {
-    throw new Error(`config.json is not valid JSON: ${e.message}`);
+    throw new Error(`${path.basename(src)} is not valid JSON: ${e.message}`);
   }
 }
 

@@ -1,5 +1,9 @@
 # Deploying KEYFRAME (free, always-on)
 
+> **Two ways to deploy:**
+> - **This guide** — everything on one free [Oracle](https://www.oracle.com/cloud/free/) VM (simplest; no CORS, no split).
+> - **[`DEPLOY-VERCEL-RENDER.md`](./DEPLOY-VERCEL-RENDER.md)** — frontend on Vercel, backend on Render (split).
+
 KEYFRAME is **one Express server** that serves the React UI, the API, and the
 rendered videos from a single origin, and runs the Chromium + FFmpeg render
 queue. So it deploys as **one app on one host** — no separate frontend, no CORS.
