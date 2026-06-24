@@ -75,6 +75,19 @@ function getFrameMd(name) {
   return frameMd;
 }
 
+// One-line human "vibe" for a pack, pulled from FRAME.md frontmatter
+// (description:/vibe:/tagline:/summary:). Lets the brief LLM match tone -> pack
+// for EVERY installed pack, not just the few hard-coded in brief.js — so the 7
+// of 10 packs with no hard-coded blurb stop being invisible to pack selection.
+function getPackVibe(name) {
+  const md = getFrameMd(name);
+  if (!md) return null;
+  const fmMatch = md.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  const fm = fmMatch ? fmMatch[1] : md;
+  const m = fm.match(/^(?:description|vibe|tagline|summary):\s*["']?(.+?)["']?\s*$/im);
+  return m ? m[1].trim().slice(0, 240) : null;
+}
+
 function getShowcasePath(name) {
   if (!FRAMES_DIR || !name) return null;
   const p = path.join(FRAMES_DIR, name, "frame-showcase.html");
@@ -107,4 +120,4 @@ function getPackTokens(name) {
   return { name, colors, fonts };
 }
 
-module.exports = { listPacks, defaultPack, resolvePack, getFrameMd, getShowcasePath, getPackTokens, FRAMES_DIR };
+module.exports = { listPacks, defaultPack, resolvePack, getFrameMd, getShowcasePath, getPackTokens, getPackVibe, FRAMES_DIR };

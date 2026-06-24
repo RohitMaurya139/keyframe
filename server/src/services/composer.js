@@ -16,10 +16,18 @@ const SYSTEM_BASE = fs.readFileSync(
   "utf8"
 );
 
-// Minimum inline-SVG vector primitives a composition must contain. The prompt
-// asks for ~6+ per scene; this is a lenient floor that simply rejects the
-// vector-less image-slideshow failure mode (enforced in quickCheck).
-const MIN_VECTOR_PRIMITIVES = 6;
+// Minimum inline-SVG vector primitives a composition must contain. FLAT floor
+// (not scene-scaled). Set to 10 so the canonical STEP-9 shared field (11 prims)
+// clears in ONE shot — 12 caused a wasted retry on an off-by-one. The real
+// anti-sparseness lever is MIN_STICKERS (the 15-prim/0-sticker slideshow that
+// prompted this would clear any vector floor but FAILS the sticker floor).
+// quickCheck sums primitives across ALL <svg> blocks. Richness shortfalls are
+// non-fatal on the final attempt (a real comp ships over the bland fallback).
+const MIN_VECTOR_PRIMITIVES = 10;
+// Decorative-furniture floor — directly targets the "no pop-in stickers" complaint.
+// Counts distinct sticker classes that ALSO appear in a GSAP tween (so a static
+// 0×0 decoy can't satisfy a class-token count). Lenient; the template carries quality.
+const MIN_STICKERS = 3;
 
 // Relative luminance (WCAG) from a #RRGGBB hex, 0 (black) … 1 (white).
 function luminance(hex) {
@@ -171,7 +179,7 @@ function buildUser(storyboard, { width, height, fps, availableAssets, framePack,
       ? "Use these local asset paths (and ONLY these) in any <img>/<video> src attributes. Use EVERY asset listed — each was fetched for the scene in its sceneId (background = full-bleed under a scrim with Ken Burns motion; inset = framed evidence). An unused asset is a wasted scene. These fetched assets are the FLOOR, not the ceiling: layer your OWN animated vector graphics on top of them — SVG particle fields, drifting shapes, drawing lines, rotating icons, burst marks, animated underlines — so that, combining the photos AND your vectors, a fresh visual element enters or leaves the frame every 1–2 seconds for the ENTIRE duration. Never let the frame hold static for more than ~1.5s."
       : "No image/video assets were pre-fetched, so do NOT include any <img> or <video> tags — but you MUST still hit the asset/vector cadence using your OWN generated vector graphics: dense animated SVG (particle fields, drifting shapes, drawing lines, rotating icons, burst marks) layered continuously so a fresh visual element enters or leaves the frame every 1–2 seconds. A text-only frame is a failure.",
     "",
-    `HARD VECTOR REQUIREMENT (auto-checked, rejected if unmet): the composition MUST contain at least one inline <svg> and at least ${MIN_VECTOR_PRIMITIVES} animated vector primitive elements (<circle>/<path>/<line>/<rect>/<polygon>) total — ideally a dense field in EVERY scene — each animated by the GSAP timeline. A composition with no inline SVG vectors will be REJECTED and you will have to redo it.`,
+    `HARD RICHNESS REQUIREMENT (auto-checked, REJECTED if unmet): (1) at least one inline <svg> with >=${MIN_VECTOR_PRIMITIVES} animated vector primitives total — TARGET 12–20 VISIBLE per scene (shared bokeh field + per-scene drawing lines / rotating ring / burst sparks); (2) at least ${MIN_STICKERS} pop-in stickers/badges/chips total — TARGET 3–6 PER SCENE — each an absolute child of its scene with class "sticker badge|chip|stat|callout", popping via back.out and animated by the GSAP timeline. Place stickers in the MARGINS over the image (never over the headline); put data-layout-allow-occlusion on each text-bearing sticker and on any content container a sticker covers. A vector-thin or sticker-less composition is REJECTED.`,
   ];
 
   if (captionCues && captionCues.length) {
@@ -275,10 +283,25 @@ function quickCheck(indexHtml, metaJsonStr, { width, height, duration, assets, e
     errs.push(`root must have data-duration="${duration}"`);
   }
   if (!/window\.__timelines\s*\[\s*["']vid["']\s*\]/.test(indexHtml)) {
-    errs.push(`missing window.__timelines["vid"] registration`);
+    // Missing registration is almost always a TRUNCATED output (the model ran
+    // out of tokens before the closer). Tell a cheap model to make it SHORTER —
+    // re-pasting a full vector field per scene is the usual bloat cause.
+    errs.push(
+      `missing window.__timelines["vid"] registration — your output was likely CUT OFF before the end. ` +
+      `Make the document SHORTER: define ONE reusable SVG vector field and reference it per scene (do NOT re-paste a full field in every scene), trim comments, and ensure the final two lines are ` +
+      `\`window.__timelines = window.__timelines || {}; window.__timelines["vid"] = tl;\` followed by ===META=== and ===END===.`
+    );
   }
   if (!/gsap\.timeline\s*\(\s*\{[^}]*paused\s*:\s*true/.test(indexHtml)) {
     errs.push(`gsap.timeline must be created with paused: true`);
+  }
+  // repeat:-1 is lint-fatal (breaks deterministic frame capture). Catch it here
+  // so the retry loop fixes it in one cheap lap instead of burning a full lint pass.
+  if (/repeat\s*:\s*-1\b/.test(indexHtml)) {
+    errs.push(
+      `forbidden repeat: -1 (infinite repeat breaks the frame engine and FAILS lint). ` +
+      `Replace EVERY \`repeat: -1\` with a finite count computed from the timeline, e.g. \`repeat: Math.floor(D / cycleSeconds) - 1\` with \`const D = <DURATION>\`.`
+    );
   }
 
   const allowed = allowedSrcs(assets);
@@ -311,9 +334,26 @@ function quickCheck(indexHtml, metaJsonStr, { width, height, duration, assets, e
     const vectorPrims = svgBlocks.reduce((n, b) => n + (b.match(PRIM_RE) || []).length, 0);
     if (svgCount < 1 || vectorPrims < MIN_VECTOR_PRIMITIVES) {
       errs.push(
-        `too few inline vector graphics (found ${svgCount} <svg> block(s) with ${vectorPrims} vector shapes inside). ` +
-        `You MUST author animated inline SVG vector layers — drifting particle/bokeh fields, drawing underlines/connectors, rotating rings, burst marks — per the MANDATORY ASSET & VECTOR CADENCE. ` +
-        `Required: at least one <svg> and at least ${MIN_VECTOR_PRIMITIVES} vector primitive elements (circle/path/line/rect/polygon) INSIDE <svg>, animated by the GSAP timeline.`
+        `too few inline vector graphics (found ${svgCount} <svg> block(s) with ${vectorPrims} vector shapes inside; need >=${MIN_VECTOR_PRIMITIVES}). ` +
+        `Author ONE shared animated SVG field (bokeh + drawing lines + rotating ring + burst sparks) referenced per scene per STEP 9 — TARGET 12–20 VISIBLE primitives per scene, real graphics not low-alpha dust — animated by the GSAP timeline.`
+      );
+    }
+
+    // Sticker floor — directly targets the "no pop-in stickers" complaint. Count
+    // distinct sticker classes that ALSO appear in a gsap tween call (so a static
+    // 0×0/opacity:0 decoy can't satisfy a class-token count). A static check can't
+    // see render-time visibility; this is a floor against the EMPTY case.
+    const stickerClassRe = /class\s*=\s*["'][^"']*\b(sticker|badge|chip|stat|callout|pill)\b/gi;
+    const stickerClasses = new Set();
+    let sm;
+    while ((sm = stickerClassRe.exec(indexHtml)) != null) stickerClasses.add(sm[1].toLowerCase());
+    const tweened = [...stickerClasses].filter(
+      (c) => new RegExp(`tl\\.(?:to|from|fromTo|set)\\([^)]*\\.${c}\\b`).test(indexHtml)
+    );
+    if (tweened.length < MIN_STICKERS) {
+      errs.push(
+        `too few animated pop-in stickers/badges/chips (found ${tweened.length} distinct sticker class(es) tweened by GSAP, need >=${MIN_STICKERS}). ` +
+        `Add decorative pop-in overlays per the POP-IN STICKERS section (burst badge / glass chip / stat sticker / connector callout) — each an absolute child of its scene with class "sticker badge|chip|stat|callout", popping via back.out, in the MARGINS over the image (NOT over the headline). Put data-layout-allow-occlusion on each text-bearing sticker and on any content container a sticker covers.`
       );
     }
   }
@@ -326,10 +366,14 @@ async function compose(storyboard, { width, height, fps, duration, maxRetries, a
   console.log(`[composer] start (duration=${duration}s, assets=${(availableAssets||[]).length}, maxRetries=${maxRetries}, framePack=${framePack || "none"}, captions=${(captionCues||[]).length})`);
   const system = await getSystemPromptWithSkills(framePack);
   const user = buildUser(storyboard, { width, height, fps, availableAssets, framePack, captionCues });
-  // Enforce the inline-vector floor on the first-pass compose only. A repair
-  // pass exists to fix a specific lint/runtime failure; re-failing its corrected
-  // doc over an unrelated vector count would needlessly escalate to fallback.
-  const enforceVectors = !(storyboard && (storyboard.__lintFeedback || storyboard.__qaIssuesToFix));
+  // Enforce the inline-vector/sticker floor on a first-pass compose AND on QA
+  // repairs. Disable it ONLY for a structural lint/runtime repair: that pass
+  // exists to fix one specific defect, so re-failing its corrected doc over an
+  // unrelated vector count would needlessly escalate to the bland fallback.
+  // A QA repair is the OPPOSITE case — QA fails on EMPTY/under-illustrated
+  // frames, so the recompose MUST still satisfy the richness floor or the
+  // "improve it" lap could hand back a sparser video than it started with.
+  const enforceVectors = !(storyboard && storyboard.__lintFeedback);
   const tries = (maxRetries ?? 2) + 1;
   let totalIn = 0, totalOut = 0;
   let lastErrors = [];
@@ -372,6 +416,24 @@ async function compose(storyboard, { width, height, fps, duration, maxRetries, a
       };
     }
     lastErrors = errs;
+
+    // Richness floors (too-few vectors / too-few stickers) are a PUSH for more,
+    // not a structural defect. On the FINAL attempt, if the ONLY remaining errors
+    // are richness floors, ACCEPT the composition — a real asset-ful comp with a
+    // few vectors short of target beats the bland deterministic fallback. Only
+    // STRUCTURAL errors (bad meta, missing timeline, forbidden src, repeat:-1)
+    // are fatal enough to escalate.
+    const richnessOnly = errs.every((e) => /^too few (inline vector graphics|animated pop-in)/.test(e));
+    if (i === tries && richnessOnly) {
+      console.warn(`[composer] accepting on final attempt despite richness shortfall (real comp beats fallback): ${errs.join(" | ").slice(0, 200)}`);
+      return {
+        indexHtml: env.indexHtml,
+        metaJson: env.metaJson,
+        tokensIn: totalIn,
+        tokensOut: totalOut,
+      };
+    }
+
     console.warn(`[composer] attempt ${i} validation failed (${errs.length} errs): ${errs.slice(0, 3).join(" | ").slice(0, 300)}`);
     augmentedUser = `${user}\n\nPrevious attempt had these problems — fix them and resend:\n${errs.map(e => `- ${e}`).join("\n")}`;
   }

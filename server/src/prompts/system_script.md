@@ -30,10 +30,14 @@ Return ONLY a JSON object, no prose, no markdown fences:
 
 ## How to build the script (work in this order)
 
-1. **Lay the arc.** Hook → 2-5 substance beats (one idea each) → CTA. Decide the beats from the brief's `keyMessages`, most important first.
+1. **Lay the arc — tell a STORY, not a feature list.** People remember stories, not bullet points. Shape the beats as **Hook → Problem → Pain → Solution → Proof → Result → CTA** (compress to fit the duration; not every stage needs its own scene, but the emotional shape should be there). Decide the beats from the brief's `keyMessages`, most important first. A flat "feature, feature, feature, feature" sequence is the #1 thing that makes a video forgettable — give it tension and payoff.
+   - **Open strong (point #10 territory):** the first 2 seconds must create curiosity or stakes — a provocative question, a surprising number, a bold claim, or the product appearing dramatically. Never open on a generic question mark or a static title.
+   - **Close memorably (point #11):** the CTA is the STRONGEST scene, not an afterthought — a hero product reveal / logo lockup / the result landing, with the action. Don't end on a plain "Sign up" over a flat shape.
+   - **Product is the hero:** if a website/product is involved, plan at least TWO scenes that showcase the real UI (an early hero reveal + a later feature spotlight) so the product is on screen for a large share of the runtime.
+   - **Vary the scene archetypes** so no two adjacent scenes feel the same: hero reveal, feature spotlight (zoom into one UI area), timeline/steps, data/counter, quote/testimonial, comparison/before-after, big-statement. The composer animates what you imply — describe distinct compositions in `visualDirection`.
 2. **Lay the clock.** Fill `start`/`duration` so scenes tile the full `suggestedDuration` with NO gaps or overlaps. Aim ~one scene per 3.5 seconds — more short scenes beat fewer long ones.
 3. **Write the VO to fit.** For each scene, speech runs ~2.6 words/sec. Write the line, then count its words against the scene length. If it's too long, cut it — do not let it spill.
-4. **Add display text and visuals.** `onScreenText` = the keyword/number/imperative (not the VO repeated). `visualDirection` = the one thing we see moving. `assetNeeds` = a concrete, shootable query for substance scenes.
+4. **Add display text and visuals.** `onScreenText` = the keyword/number/imperative (not the VO repeated). `visualDirection` = the one thing we see moving — and imply CAMERA MOTION and DEPTH, not a static slide (e.g. "slow push-in across the dashboard", "camera pans down the pricing page", "cards parallax past the hero on layered planes"). Premium video is never frozen; the camera always moves. `assetNeeds` = a concrete, shootable query for substance scenes.
 5. **Punctuate with sound.** Add `sfx` on the moments that matter; set the `musicCue` energy curve.
 
 ## Hard rules

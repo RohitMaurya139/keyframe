@@ -70,8 +70,13 @@ function pickVoice(job, script) {
   //    marin — no gender fit, no variety).
   const want = `${job.voice_style || ""} ${script?.voice?.style || ""} ${script?.voice?.pace || ""}`.toLowerCase();
   const has = (...ks) => ks.some((k) => want.includes(k));
-  if (has("female", "woman", "feminine", "she/her", "she ")) return has("warm", "soft", "calm", "gentle") ? "sage" : "coral";
-  if (has("male", "man", "masculine", "he/him", "he ")) return has("deep", "authoritative", "bold", "gravitas") ? "cedar" : "ash";
+  // Gender cues MUST match on word boundaries — substring includes("man")/
+  // includes("he ") fired inside "human"/"performance"/"the ", forcing neutral
+  // and female-leaning brands onto a male voice before the tone branches ran.
+  const FEM  = /\b(female|woman|feminine|she|her|hers)\b/.test(want);
+  const MASC = /\b(male|man|masculine|he|him|his)\b/.test(want);
+  if (FEM)  return has("warm", "soft", "calm", "gentle") ? "sage" : "coral";
+  if (MASC) return has("deep", "authoritative", "bold", "gravitas") ? "cedar" : "ash";
   if (has("energetic", "upbeat", "excited", "punchy", "hype", "playful")) return "ballad";
   if (has("warm", "calm", "soothing", "gentle", "reassuring")) return "sage";
   if (has("elegant", "sophisticated", "premium", "refined", "luxury")) return "verse";
@@ -85,7 +90,12 @@ function pickVoice(job, script) {
 // artifacts each agent adds.
 
 async function frameSelectorAgent(s) {
-  const framePack = frameRegistry.resolvePack(s.job.frame_pack || s.brief?.suggestedFramePack || "auto");
+  // Resolve each candidate INDEPENDENTLY: a stale/removed job.frame_pack id
+  // resolves to null, and the old single combined resolvePack() then collapsed
+  // to a null (unstyled, generic) pack instead of trying the brief's valid pick.
+  const framePack = frameRegistry.resolvePack(s.job.frame_pack)
+    || frameRegistry.resolvePack(s.brief?.suggestedFramePack)
+    || frameRegistry.resolvePack("auto");
   console.log(`[agents] frame_selector → ${framePack}`);
   return { framePack };
 }
@@ -94,7 +104,7 @@ async function storyboardAgent(s) {
   db.setProgress(s.job.id, "storyboard");
   const sbPrompt = storyboardPromptFromScript(s.script, s.brief);
   const r = await generateStoryboard({ prompt: sbPrompt, duration: s.job.duration, orientation: s.job.orientation });
-  s.tracker.addLlm({ inputTokens: r.tokensIn, outputTokens: r.tokensOut });
+  s.tracker.addLlm({ inputTokens: r.tokensIn, outputTokens: r.tokensOut, stage: "storyboard" });
   return { storyboard: r.storyboard };
 }
 
@@ -170,18 +180,47 @@ async function assetPlannerAgent(s) {
       wants.push({ kind: "search", scene, need: { ...need, type } });
     }
   }
+  // A need is a vector if its ROLE is icon/texture/vector OR its script TYPE is
+  // "icon" (the script schema allows type:"icon" with any role; keying only off
+  // role missed those and fetched explicitly-requested icons as photos).
+  const isVectorNeed = (n) => VECTOR_ROLES.has(roleOf(n)) || n.type === "icon";
   const videos = wants.filter((w) => w.need.type === "video").slice(0, 2);
   // Vectors get their OWN budget so a long photo list can't starve them — this
   // is what finally feeds the curated SVG library into films.
-  const vectors = wants.filter((w) => w.need.type !== "video" && VECTOR_ROLES.has(roleOf(w.need))).slice(0, 8);
-  const photos  = wants.filter((w) => w.need.type !== "video" && !VECTOR_ROLES.has(roleOf(w.need))).slice(0, 12 - videos.length);
+  const vectors = wants.filter((w) => w.need.type !== "video" && isVectorNeed(w.need)).slice(0, 8);
+  const photos  = wants.filter((w) => w.need.type !== "video" && !isVectorNeed(w.need)).slice(0, 12 - videos.length);
   console.log(`[agents] asset_planner: ${screenshotPlan.length} screenshot(s) + ${videos.length} video(s) + ${photos.length} photo(s) + ${vectors.length} vector(s) (${wants.filter((w) => w.need.derived).length} derived)`);
   return { assetPlan: { screenshots: screenshotPlan, searches: [...videos, ...photos, ...vectors] } };
 }
 
 // Asset Search — executes the plan: our database first, then providers.
+// Stopwords for the topical anchor — drop the brand name and generic filler so
+// the anchor is the SUBJECT (beauty, cosmetics), not "bulkdoor"/"marketplace".
+const ANCHOR_STOP = new Set([
+  "the", "and", "for", "with", "your", "our", "that", "this", "from", "into",
+  "india", "indias", "best", "top", "leading", "number", "online", "platform",
+  "marketplace", "website", "company", "brand", "brands", "business", "solution",
+  "solutions", "service", "services", "app", "get", "now", "more", "all", "new",
+  "buy", "shop", "store", "official", "home", "page", "welcome", "trusted",
+]);
+
+// 1-2 SUBJECT words distilled from the brief/site, used to keep derived stock
+// queries on-topic. Without this, abstract scene directions ("scalable growth")
+// fetched wildly off-topic stock (trading charts, a car logo) because the query
+// never carried what the video is actually about.
+function topicAnchor(job, brief) {
+  const src = `${(brief?.keyMessages || []).join(" ")} ${brief?.audience || ""} ${brief?.goal || ""}`.toLowerCase();
+  const freq = {};
+  for (const w of src.match(/[a-z]{4,}/g) || []) {
+    if (!ANCHOR_STOP.has(w)) freq[w] = (freq[w] || 0) + 1;
+  }
+  return Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 2).map((x) => x[0]).join(" ");
+}
+
 async function assetSearchAgent(s) {
   const { job, jobDir, tracker, assetPlan } = s;
+  const anchor = topicAnchor(job, s.brief);
+  if (anchor) console.log(`[agents] asset_search topic anchor: "${anchor}"`);
   db.setProgress(job.id, "assets");
   fs.mkdirSync(path.join(jobDir, "assets", "images"), { recursive: true });
   fs.mkdirSync(path.join(jobDir, "assets", "videos"), { recursive: true });
@@ -216,12 +255,21 @@ async function assetSearchAgent(s) {
   for (const { scene, need } of assetPlan.searches) {
     const isVideo = need.type === "video";
     const relPath = isVideo ? `assets/videos/${iVid++}.mp4` : `assets/images/${iImg++}.jpg`;
-    const isIcon = String(need.role || "").toLowerCase() === "icon";
-    const query = isIcon ? `${need.query} icon flat` : need.query;
+    // type:"icon" OR role icon/texture -> want a curated vector. Do NOT append
+    // "icon flat" to the query: that suffix trips the curated library's 0.5
+    // relevance gate and zeroes its SVG hits — kindPref:"vector" already routes
+    // to the SVG library on the concrete subject query.
+    const isIcon = need.type === "icon" || ["icon", "texture"].includes(String(need.role || "").toLowerCase());
+    // Anchor PHOTO/background queries to the video's subject so a derived
+    // direction like "scalable growth" becomes "beauty cosmetics scalable
+    // growth" — on-topic stock instead of trading charts. Icons/vectors keep
+    // their concrete query (anchoring an abstract shape rarely helps). The plain
+    // query is kept as a fallback so an over-narrow anchor still finds SOMETHING.
+    const query = (!isIcon && anchor) ? `${anchor} ${need.query}` : need.query;
     const r = await acquire({
-      query, fallbackQueries: fallbackQueriesFor(query), type: isVideo ? "video" : "image",
+      query, fallbackQueries: [need.query, ...fallbackQueriesFor(query)], type: isVideo ? "video" : "image",
       orientation: job.orientation, outputPath: path.join(jobDir, relPath), tracker,
-      kindPref: isVideo ? undefined : kindPrefFor(need.role),
+      kindPref: isVideo ? undefined : (isIcon ? "vector" : kindPrefFor(need.role)),
       excludeIds: usedLibraryIds,
     }).catch(() => null);
     if (!r) continue;
@@ -267,8 +315,10 @@ async function voiceAgent(s) {
       : Promise.resolve(null)
   )).then((a) => a.filter(Boolean));
 
+  // Cap SFX low — 6 whooshes/dings layered over per-scene VO + music read as
+  // cluttered, overlapping audio. A few accents beat a wall of sound.
   const sfxWanted = [];
-  for (const sc of script.scenes) for (const name of (sc.sfx || [])) if (sfxWanted.length < 6) sfxWanted.push({ name, startSec: sc.start });
+  for (const sc of script.scenes) for (const name of (sc.sfx || [])) if (sfxWanted.length < 3) sfxWanted.push({ name, startSec: sc.start });
   const sfxTask = Promise.all(sfxWanted.map((x, i) =>
     getSfx({ name: x.name, outputPath: path.join(audioDir, `sfx-${i}.mp3`), tracker })
       .then((p) => p ? { path: p, startSec: x.startSec, volume: 0.4 } : null).catch(() => null)

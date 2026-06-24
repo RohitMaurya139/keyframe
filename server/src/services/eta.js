@@ -44,8 +44,8 @@ function estimateRenderSec({ duration, orientation, resolutionQuality, renderQua
  *
  * jobsAhead = activeRenders + jobsQueuedBeforeThisOne
  */
-function estimateEta({ duration, orientation, quality, cpus, jobsAhead, concurrency }) {
-  const renderSec = estimateRenderSec({ duration, orientation, quality, cpus });
+function estimateEta({ duration, orientation, resolutionQuality, renderQuality, quality, cpus, jobsAhead, concurrency }) {
+  const renderSec = estimateRenderSec({ duration, orientation, resolutionQuality: resolutionQuality ?? quality, renderQuality, cpus });
   if (jobsAhead < concurrency) {
     // Free capacity — render starts essentially immediately.
     return { renderSec, waitSec: 0, totalSec: renderSec };
@@ -60,8 +60,8 @@ function estimateEta({ duration, orientation, quality, cpus, jobsAhead, concurre
 /**
  * Remaining seconds for a job that has already started rendering.
  */
-function estimateRemainingSec({ duration, orientation, quality, cpus, startedAtMs }) {
-  const totalRender = estimateRenderSec({ duration, orientation, quality, cpus });
+function estimateRemainingSec({ duration, orientation, resolutionQuality, renderQuality, quality, cpus, startedAtMs }) {
+  const totalRender = estimateRenderSec({ duration, orientation, resolutionQuality: resolutionQuality ?? quality, renderQuality, cpus });
   if (!startedAtMs) return totalRender;
   const elapsed = Math.max(0, Math.floor((Date.now() - startedAtMs) / 1000));
   return Math.max(0, totalRender - elapsed);

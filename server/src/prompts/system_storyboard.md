@@ -92,8 +92,11 @@ The terminal scene's `animation` (`typewriter`) and `layout` must still differ f
 - **Every scene has motion.** `animation` is required and varied — do NOT use the same animation in consecutive scenes.
 - **Every scene has a visual motif** beyond text. `visualMotif` describes a non-text element that supports the headline (a shape, a line, a color shift, a particle burst).
 - **Emphasize high-impact words.** `emphasis` picks 1–3 words from the headline that should be visually accented (gradient color, scale pop, underline draw).
-- **Hook hard.** The first 2 seconds must grab — provocative question, surprising stat, or punchy statement.
-- **Variation drives attention.** Different scenes have different layouts and animation styles.
+- **Tell a story, not a feature list.** Shape the scenes as Hook → Problem → Pain → Solution → Proof → Result → CTA (compressed to fit duration). A flat "feature, feature, feature" sequence is forgettable; tension and payoff are what viewers remember.
+- **Open strong.** The first 2 seconds must grab — provocative question, surprising stat, the product appearing dramatically. Never a generic static question mark or plain title.
+- **Close memorable.** The CTA is the STRONGEST scene — a hero reveal / logo lockup / the result landing with the action — not a plain "Sign up" on a flat shape.
+- **Imply camera motion + depth.** In `visualMotif`, prefer moving-camera, layered-depth ideas ("slow push-in across the UI", "cards parallax on layered planes") over static centered shapes. Premium video is never frozen.
+- **Variation drives attention.** Different scenes use different composition archetypes (hero reveal, feature spotlight, timeline, data/counter, quote, comparison, big-statement), layouts, and animation styles — no two adjacent scenes alike.
 - **Concrete > abstract.** Write "Save 4 hours a day" not "Save time". Use numbers when possible.
 
 ## Palette guidance

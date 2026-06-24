@@ -53,15 +53,16 @@ Rules for queries:
 ## Hard rules
 
 1. **Honor flags.** If `images: false`, OMIT the `images` key entirely. Same for `videos`. Do NOT return an empty array — omit the key.
-2. **Count caps.** At most 1 image OR 1 video per scene. **At most 1 video total** (videos are expensive to render; a second one blows the render budget). Up to 5 images total. Prefer images over videos unless one specific moment truly needs motion.
+2. **Count caps — fill the video with imagery.** Give **EVERY scene at least one image** (1–2 per scene; a hero/feature scene may take 2 — a full-bleed plus a supporting inset). **Up to 10 images total** — aim high, a richer video needs more imagery, not less. **At most 1 video total** (videos are expensive to render; a second one blows the render budget). Prefer images over videos unless one specific moment truly needs motion.
 3. **Timings align with scene boundaries.** `startSec` + `durationSec` must fall inside one scene from the storyboard. Use that scene's own `start`/`duration`.
-4. **Style choice:**
-   - `"fullscreen"` — asset fills the canvas (bold, dominant). Use for peak/hero moments.
+4. **Style choice — bias toward BIG. A small image reads as an amateur "sticker on a slide"; a large one reads as cinematic.** Default to `fullscreen` or `background` for hero/product/feature moments; reserve `inset` for genuinely supportive secondary visuals only.
+   - `"fullscreen"` — asset fills the canvas (bold, dominant). Use for peak/hero moments and for any product / UI / app / website subject (the product is the star — show it big).
    - `"background"` — behind text with a darken/blur overlay (atmospheric). Use when the scene also carries headline text.
-   - `"inset"` — smaller frame in a corner or beside text (supportive). Use when the scene already has strong on-screen text or a second element.
+   - `"inset"` — a framed visual BESIDE text (supportive, but still substantial — the composer renders it at ≥40% width, never a tiny corner thumbnail). Use only when the scene already has strong on-screen text or a second element. Never pick `inset` for the main product shot.
+   - Note: REAL website/app screenshots are supplied automatically and are always given full hero treatment downstream — you do not plan or size those here.
 5. **Vary the imagery.** No two scenes should request near-identical queries. Different subjects, different settings — variety is what keeps attention.
 6. **Match the orientation.** Vertical (9:16): subjects that compose tall — portraits, close-ups, standing figures. Horizontal (16:9): wider scenes, landscapes, two-person shots. Square: centered single subjects.
-7. **Skip pure-typography beats.** Hook and CTA scenes often hit harder as pure text — only request an asset for a scene if a real image genuinely strengthens it.
+7. **Cover every scene.** Give every scene an image, INCLUDING the hook and CTA — a moody full-bleed photo behind the headline beats a flat colored background. Only leave a scene image-less if a pure-typography treatment is genuinely stronger for that specific beat; default to giving it an image.
 
 ## Worked example
 
@@ -72,14 +73,16 @@ Rules for queries:
 {
   "images": [
     { "query": "messy pile paper receipts desk", "sceneId": "s1", "startSec": 0, "durationSec": 3, "style": "background", "alt": "cluttered pile of receipts on a desk" },
-    { "query": "phone photographing receipt closeup hand", "sceneId": "s2", "startSec": 3, "durationSec": 5, "style": "fullscreen", "alt": "hand snapping a photo of a receipt with a phone" }
+    { "query": "phone photographing receipt closeup hand", "sceneId": "s2", "startSec": 3, "durationSec": 5, "style": "fullscreen", "alt": "hand snapping a photo of a receipt with a phone" },
+    { "query": "tidy expense dashboard laptop screen", "sceneId": "s3", "startSec": 8, "durationSec": 5, "style": "background", "alt": "clean expense dashboard on a laptop" },
+    { "query": "relaxed freelancer coffee laptop morning", "sceneId": "s4", "startSec": 13, "durationSec": 5, "style": "background", "alt": "calm freelancer at a laptop with coffee" }
   ],
   "videos": [
-    { "query": "smartphone screen app animation motion", "sceneId": "s3", "startSec": 8, "durationSec": 5, "style": "background" }
+    { "query": "smartphone screen app animation motion", "sceneId": "s3", "startSec": 8, "durationSec": 5, "style": "fullscreen" }
   ]
 }
 ```
 
-Note: s1 and s2 carry real photos with concrete queries; the single allowed video lands on the one motion moment (s3); the CTA (s4) is intentionally left to pure typography. Produce your own plan in this exact shape — never copy these values.
+Note: EVERY scene gets an image — including the CTA (s4), which uses a moody background photo behind the headline rather than a flat color. The single allowed video lands on the one motion moment (s3). Produce your own plan in this exact shape — never copy these values.
 
 Output ONLY the JSON. No markdown fences, no prose.

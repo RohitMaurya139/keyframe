@@ -38,19 +38,44 @@ async function generateThumbnail(videoPath, thumbPath, durationSec) {
   await ffCapture(["-y", "-hide_banner", "-loglevel", "error", "-ss", String(bestT), "-i", videoPath, "-frames:v", "1", "-vf", "scale=640:-2", "-q:v", "4", thumbPath]);
 }
 
-function render({ jobId, jobDir, durationSec, quality = config.server.renderQuality, abortSignal }) {
-  return new Promise((resolve, reject) => {
+// Render failures that are NOT the composition's fault and clear on a fresh
+// launch a few seconds later — safe to retry once:
+//   • Windows NTSTATUS exceptions (exit code in the 0xC0000000+ range), e.g.
+//     0xC0000142 (STATUS_DLL_INIT_FAILED) when headless Chromium can't init
+//     under transient memory / desktop-heap pressure.
+//   • A plain non-zero exit (1) AFTER the browser had already launched — a
+//     transient Chromium render hiccup (asset decode timing, GPU/ANGLE blip,
+//     memory pressure on the 8GB box). Lint + runtime smoke already passed, and
+//     the identical composition often renders cleanly on a second pass.
+// Watchdog/abort kills (signal set, code null) are NOT retried — we killed it.
+const NT_CRASH_FLOOR = 0xC0000000; // 3221225472
+function isTransientLaunchCrash(code, signal) {
+  if (signal) return false;                 // we killed it (watchdog/abort)
+  if (typeof code !== "number") return false;
+  if (code >= NT_CRASH_FLOOR) return true;  // Windows fatal-exception range
+  return code !== 0;                         // any other non-zero exit — retry once
+}
+
+const delay = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// One render attempt. Resolves { ok, code, signal, stdout, stderr } — never
+// rejects on a non-zero exit, so the retry loop can decide what to do.
+function renderAttempt({ jobId, jobDir, outRelative, durationSec, quality, abortSignal }) {
+  return new Promise((resolve) => {
     const cmd = WINDOWS ? "npx.cmd" : "npx";
-    const outRelative = path.join("renders", "out.mp4");
     const workers = Math.max(1, Number(config.server.renderWorkers) || 1);
+    // Pin the hyperframes version so renders are deterministic and immune to
+    // npm publish-propagation races (an unpinned `latest` can resolve to a
+    // version whose tarball hasn't propagated yet → ETARGET). Bump the pin in
+    // config.render.hyperframesVersion. Falls back to unpinned `latest`.
+    const hfVersion = config.render?.hyperframesVersion;
+    const hfSpec = hfVersion ? `hyperframes@${hfVersion}` : "hyperframes";
     const args = [
-      "--yes", "hyperframes", "render",
+      "--yes", hfSpec, "render",
       "--output", outRelative,
       "--quality", quality,
       "--workers", String(workers),
     ];
-
-    fs.mkdirSync(path.join(jobDir, "renders"), { recursive: true });
 
     // Node ≥18.20 throws EINVAL spawning .cmd files without a shell (CVE-2024-27980).
     const child = spawn(cmd, args, {
@@ -81,14 +106,20 @@ function render({ jobId, jobDir, durationSec, quality = config.server.renderQual
     // Watchdog accommodates first-render overhead (Hyperframes downloads ~107 MB
     // Chromium on the first use of a fresh deploy). Formula:
     //   max(minSec, duration × multiplier) + bufferSec
-    // Defaults: 10 s video → max(360, 100) + 180 = 540 s;
-    //           30 s video → max(360, 300) + 180 = 540 s;
-    //          150 s video → max(360, 1500) + 180 = 1680 s (28 min).
     const minSec    = Math.max(0, Number(config.server.watchdogMinSec)    || 0);
     const bufferSec = Math.max(0, Number(config.server.watchdogBufferSec) || 60);
     const mult      = Math.max(1, Number(config.server.watchdogMultiplier) || 8);
     const coreSec   = Math.max(minSec, Math.floor(durationSec * mult));
     const watchdogMs = coreSec * 1000 + bufferSec * 1000;
+
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (abortSignal) abortSignal.removeEventListener("abort", onAbort);
+      resolve(result);
+    };
 
     const timer = setTimeout(() => {
       console.warn(`[renderer] job ${jobId} exceeded ${watchdogMs}ms; killing`);
@@ -100,7 +131,6 @@ function render({ jobId, jobDir, durationSec, quality = config.server.renderQual
     // eating CPU after the pipeline has moved on to the next tier.
     const onAbort = () => {
       console.warn(`[renderer] job ${jobId} aborted by pipeline; killing`);
-      clearTimeout(timer);
       try { child.kill("SIGKILL"); } catch { /* noop */ }
     };
     if (abortSignal) {
@@ -108,45 +138,63 @@ function render({ jobId, jobDir, durationSec, quality = config.server.renderQual
       else abortSignal.addEventListener("abort", onAbort, { once: true });
     }
 
-    child.on("error", (e) => {
-      clearTimeout(timer);
-      reject(new Error(`render spawn error: ${e.message}`));
-    });
-
-    child.on("exit", (code, signal) => {
-      clearTimeout(timer);
-      if (code !== 0) {
-        const tail = [stdout.slice(-1500), stderr.slice(-1500)].filter(Boolean).join("\n---\n");
-        return reject(new Error(
-          `render exited with code ${code}${signal ? ` (signal ${signal})` : ""}. Tail:\n${tail}`
-        ));
-      }
-
-      const srcPath = path.join(jobDir, outRelative);
-      if (!fs.existsSync(srcPath)) {
-        return reject(new Error(`render reported success but ${outRelative} is missing`));
-      }
-
-      fs.mkdirSync(config.paths.videosDir, { recursive: true });
-      const destPath = path.join(config.paths.videosDir, `${jobId}.mp4`);
-      try {
-        fs.renameSync(srcPath, destPath);
-      } catch (e) {
-        // Cross-device fallback (rare on EB, but safe): copy + unlink.
-        fs.copyFileSync(srcPath, destPath);
-        fs.unlinkSync(srcPath);
-      }
-
-      // Gallery thumbnail (best effort, non-blocking): brightest sampled frame
-      // so a dark intro never produces a blank-looking card.
-      try {
-        const thumbPath = path.join(config.paths.videosDir, `${jobId}.jpg`);
-        generateThumbnail(destPath, thumbPath, durationSec).catch(() => { /* thumbnail is optional */ });
-      } catch { /* noop */ }
-
-      resolve({ videoPath: destPath, videoUrl: `/videos/${jobId}.mp4` });
-    });
+    child.on("error", (e) => finish({ ok: false, code: -1, signal: null, stdout, stderr: `${stderr}\nspawn error: ${e.message}` }));
+    child.on("exit", (code, signal) => finish({ ok: code === 0, code, signal, stdout, stderr }));
   });
+}
+
+async function render({ jobId, jobDir, durationSec, quality = config.server.renderQuality, abortSignal }) {
+  const outRelative = path.join("renders", "out.mp4");
+  fs.mkdirSync(path.join(jobDir, "renders"), { recursive: true });
+
+  // Up to 2 attempts: a transient render failure (Chromium launch crash like
+  // 0xC0000142, or a plain exit-1 hiccup after launch) under memory pressure
+  // clears on a fresh launch a few seconds later — the composition itself
+  // already passed lint + runtime smoke.
+  const MAX_ATTEMPTS = 2;
+  let res;
+  for (let i = 1; i <= MAX_ATTEMPTS; i++) {
+    if (abortSignal?.aborted) throw abortSignal.reason || new Error("render aborted");
+    res = await renderAttempt({ jobId, jobDir, outRelative, durationSec, quality, abortSignal });
+    if (res.ok) break;
+    if (i < MAX_ATTEMPTS && isTransientLaunchCrash(res.code, res.signal) && !abortSignal?.aborted) {
+      console.warn(`[renderer] job ${jobId} attempt ${i} render failed (code ${res.code} = 0x${(res.code >>> 0).toString(16)}); likely transient under memory pressure (browser launched, lint+runtime already passed) — retrying in 5s`);
+      await delay(5000);
+      continue;
+    }
+    break;
+  }
+
+  if (!res.ok) {
+    const tail = [res.stdout.slice(-1500), res.stderr.slice(-1500)].filter(Boolean).join("\n---\n");
+    throw new Error(
+      `render exited with code ${res.code}${res.signal ? ` (signal ${res.signal})` : ""}. Tail:\n${tail}`
+    );
+  }
+
+  const srcPath = path.join(jobDir, outRelative);
+  if (!fs.existsSync(srcPath)) {
+    throw new Error(`render reported success but ${outRelative} is missing`);
+  }
+
+  fs.mkdirSync(config.paths.videosDir, { recursive: true });
+  const destPath = path.join(config.paths.videosDir, `${jobId}.mp4`);
+  try {
+    fs.renameSync(srcPath, destPath);
+  } catch (e) {
+    // Cross-device fallback (rare on EB, but safe): copy + unlink.
+    fs.copyFileSync(srcPath, destPath);
+    fs.unlinkSync(srcPath);
+  }
+
+  // Gallery thumbnail (best effort, non-blocking): brightest sampled frame so a
+  // dark intro never produces a blank-looking card.
+  try {
+    const thumbPath = path.join(config.paths.videosDir, `${jobId}.jpg`);
+    generateThumbnail(destPath, thumbPath, durationSec).catch(() => { /* thumbnail is optional */ });
+  } catch { /* noop */ }
+
+  return { videoPath: destPath, videoUrl: `/videos/${jobId}.mp4` };
 }
 
 module.exports = { render };

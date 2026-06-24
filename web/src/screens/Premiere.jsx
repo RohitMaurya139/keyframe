@@ -18,6 +18,15 @@ export default function Premiere({ projectId, onRemix, onNew }) {
   const cost = project.usage?.totalCostUsd;
   const secs = project.durationMs ? Math.round(project.durationMs / 1000) : null;
 
+  // Per-video token consumption: LLM (script + planners + composer + QA + repairs)
+  // plus the estimated TTS audio tokens. Output tokens dominate the cost.
+  const llm = project.usage?.llm;
+  const tts = project.usage?.tts;
+  const totalTokens = llm
+    ? llm.inputTokens + llm.outputTokens + ((tts?.inputTokensEst || 0) + (tts?.outputTokensEst || 0))
+    : null;
+  const fmt = (n) => Number(n).toLocaleString();
+
   return (
     <div className="max-w-4xl mx-auto px-6 pt-12 pb-24">
       <div className="flex items-end justify-between">
@@ -78,11 +87,29 @@ export default function Premiere({ projectId, onRemix, onNew }) {
           transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
           className="mt-4 glass-card p-5 text-sm space-y-4">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <Stat label="LLM cost" value={cost != null ? `$${Number(cost).toFixed(3)}` : "—"} />
+            <Stat label="Total cost" value={cost != null ? `$${Number(cost).toFixed(3)}` : "—"} />
             <Stat label="Production time" value={secs ? `${secs}s` : "—"} />
             <Stat label="Composition" value={project.finalAttempt || "—"} />
-            <Stat label="Tokens" value={project.usage?.llm ? `${project.usage.llm.inputTokens}/${project.usage.llm.outputTokens}` : "—"} />
+            <Stat
+              label="Tokens used"
+              value={totalTokens != null ? fmt(totalTokens) : "—"}
+              sub={llm ? `${fmt(llm.inputTokens)} in · ${fmt(llm.outputTokens)} out · ${llm.callCount} calls` : null}
+            />
           </div>
+          {project.usage?.byStage?.length > 0 && (
+            <div>
+              <div className="text-[10px] uppercase tracking-widest text-dim mb-2">Tokens by stage</div>
+              <ul className="space-y-1">
+                {project.usage.byStage.map((s) => (
+                  <li key={s.stage} className="flex items-baseline justify-between gap-3 text-xs text-dim">
+                    <span className="capitalize text-ink">{s.stage}</span>
+                    <span className="flex-1 border-b border-line/40 translate-y-[-2px]" />
+                    <span>{fmt(s.totalTokens)} tok · {s.callCount} {s.callCount === 1 ? "call" : "calls"} · ${Number(s.costUsd).toFixed(3)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {project.assets?.length > 0 && (
             <div>
               <div className="text-[10px] uppercase tracking-widest text-dim mb-2">Asset attribution</div>
@@ -103,11 +130,12 @@ export default function Premiere({ projectId, onRemix, onNew }) {
   );
 }
 
-function Stat({ label, value }) {
+function Stat({ label, value, sub }) {
   return (
     <div>
       <div className="text-[10px] uppercase tracking-widest text-dim">{label}</div>
       <div className="font-display font-bold mt-0.5">{value}</div>
+      {sub && <div className="text-[10px] text-dim mt-0.5">{sub}</div>}
     </div>
   );
 }

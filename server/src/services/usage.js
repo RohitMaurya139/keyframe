@@ -6,18 +6,39 @@
 //     Hyperframes render/lint, OpenRouter TTS)
 //
 // Pricing (per 1M tokens, USD):
-//   The LLM cost uses the PRIMARY provider's rates (KIE Gemini 3.5 Flash), which
-//   Primary chat model is OpenRouter google/gemini-3.5-flash (input 1.50 /
-//   output 9.00 per M). Fast-stage and fallback models are cheaper, so cost
-//   is a slight overestimate for those calls.
-//   openai/gpt-audio-mini (TTS):      input 0.60   output 2.40
+//   Mixed setup — each stage is priced by the model it ACTUALLY runs on
+//   (resolved from config.llm.stageModels), not one flat rate. The composer
+//   (~90% of tokens) runs on deepseek; the cheap stages on gemini-flash-lite.
+//   TTS (openai/gpt-audio-mini) is estimated separately.
 // Everything else is free.
 
+const config = require("../config");
+
+// Per-model OpenRouter prices (USD per 1M tokens). Unknown ids fall back to
+// DEFAULT_MODEL_PRICE. Keep in sync with config.json's models when they change.
+const MODEL_PRICING = {
+  "google/gemini-2.5-flash-lite": { in: 0.10, out: 0.40 },
+  "google/gemini-2.5-flash":      { in: 0.30, out: 2.50 },
+  "deepseek/deepseek-v4-pro":     { in: 0.44, out: 0.87 },
+  "deepseek/deepseek-v4-flash":   { in: 0.09, out: 0.18 },
+  "moonshotai/kimi-k2.6":         { in: 0.66, out: 3.50 },
+  "anthropic/claude-opus-4.8":    { in: 5.00, out: 25.0 },
+  "minimax/minimax-m3":           { in: 0.30, out: 1.20 },
+};
+const DEFAULT_MODEL_PRICE = { in: 0.30, out: 2.50 };
+
+// Resolve the model a stage runs on (mirrors openrouter.modelForStage but kept
+// local to avoid a require cycle). qa/brief/script/etc. map to the default.
+function modelForStage(stage) {
+  const llm = config.llm || {};
+  const kind = (llm.stageModels || {})[stage] || "default";
+  if (kind === "fast") return llm.modelFast || llm.model;
+  if (kind === "default") return llm.model;
+  return kind; // literal model id (e.g. composer)
+}
+function priceFor(model) { return MODEL_PRICING[model] || DEFAULT_MODEL_PRICE; }
+
 const PRICING = {
-  llm: {
-    inputPerMillionUsd:  1.50,
-    outputPerMillionUsd: 9.00,
-  },
   tts: {
     inputPerMillionUsd:  0.60,
     outputPerMillionUsd: 2.40,
@@ -32,6 +53,10 @@ function round(n, decimals = 6) {
 class UsageTracker {
   constructor() {
     this.llm = { inputTokens: 0, outputTokens: 0, callCount: 0 };
+    // Per-stage LLM token buckets: stage -> { inputTokens, outputTokens, callCount }.
+    // Lets the cost report show WHERE the tokens went (composer + repairs usually
+    // dominate). Repair laps re-bill the composer, so its bucket also reveals churn.
+    this.byStage = {};
     this.tts = {
       inputChars: 0,
       inputTokensEst: 0,
@@ -41,11 +66,19 @@ class UsageTracker {
     this.external = {}; // apiName -> callCount
   }
 
-  // LLM (MiniMax M3 via OpenRouter chat completions)
-  addLlm({ inputTokens = 0, outputTokens = 0 } = {}) {
-    this.llm.inputTokens  += inputTokens  || 0;
-    this.llm.outputTokens += outputTokens || 0;
+  // LLM (OpenRouter chat completions). Pass `stage` to attribute the tokens to
+  // a pipeline stage (brief/script/storyboard/assets/audio/composer/qa/…) for
+  // the per-stage breakdown; defaults to "other" when a caller omits it.
+  addLlm({ inputTokens = 0, outputTokens = 0, stage = "other" } = {}) {
+    const i = inputTokens || 0;
+    const o = outputTokens || 0;
+    this.llm.inputTokens  += i;
+    this.llm.outputTokens += o;
     this.llm.callCount    += 1;
+    const b = (this.byStage[stage] ||= { inputTokens: 0, outputTokens: 0, callCount: 0 });
+    b.inputTokens  += i;
+    b.outputTokens += o;
+    b.callCount    += 1;
     this.addExternal("openrouter_chat");
   }
 
@@ -75,13 +108,36 @@ class UsageTracker {
   }
 
   computeCosts() {
-    const llmInUsd   = (this.llm.inputTokens  * PRICING.llm.inputPerMillionUsd)  / 1e6;
-    const llmOutUsd  = (this.llm.outputTokens * PRICING.llm.outputPerMillionUsd) / 1e6;
+    // Price each stage by the model it actually ran on, then sum — so the
+    // composer's deepseek tokens and the cheap stages' flash-lite tokens are
+    // billed at their real rates (not one flat rate).
+    let llmInUsd = 0, llmOutUsd = 0;
+    const byStage = Object.entries(this.byStage)
+      .map(([stage, b]) => {
+        const model = modelForStage(stage);
+        const pr    = priceFor(model);
+        const inUsd  = (b.inputTokens  * pr.in)  / 1e6;
+        const outUsd = (b.outputTokens * pr.out) / 1e6;
+        llmInUsd  += inUsd;
+        llmOutUsd += outUsd;
+        return {
+          stage,
+          model,
+          inputTokens:  b.inputTokens,
+          outputTokens: b.outputTokens,
+          totalTokens:  b.inputTokens + b.outputTokens,
+          callCount:    b.callCount,
+          costUsd:      round(inUsd + outUsd),
+        };
+      })
+      .sort((a, b) => b.costUsd - a.costUsd);
+
     const ttsInUsd   = (this.tts.inputTokensEst  * PRICING.tts.inputPerMillionUsd)  / 1e6;
     const ttsOutUsd  = (this.tts.outputTokensEst * PRICING.tts.outputPerMillionUsd) / 1e6;
     const total      = llmInUsd + llmOutUsd + ttsInUsd + ttsOutUsd;
 
     return {
+      byStage,
       llm: {
         inputTokens:   this.llm.inputTokens,
         outputTokens:  this.llm.outputTokens,

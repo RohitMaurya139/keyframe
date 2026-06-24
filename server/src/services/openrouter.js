@@ -62,6 +62,22 @@ function isRetryable(err) {
   return false;
 }
 
+// A hard "this MODEL can't serve this request" error: an unknown/removed model
+// id, or the prompt overflowing the model's context window. Retrying the SAME
+// model is futile (so isRetryable stays false — no wasted same-model retries),
+// but a DIFFERENT fallback model may well succeed. These must ESCALATE to the
+// fallback instead of collapsing the stage — e.g. the composer dropping straight
+// to the bland deterministic template when gemini could have composed the video.
+function isModelFatal(err) {
+  const status = err?.status || err?.response?.status;
+  // 400/404 = bad id / context overflow. 403 = a premium model (e.g. opus)
+  // intermittently refused by OpenRouter policy/routing — a DIFFERENT fallback
+  // model serves it, so escalate instead of collapsing to the bland template.
+  if (status === 400 || status === 403 || status === 404) return true;
+  const msg = String(err?.message || "").toLowerCase();
+  return /context length|maximum context|context_length_exceeded|no endpoints|not a valid model|model.*not found|no such model/.test(msg);
+}
+
 // Combine an optional external AbortSignal (e.g. the pipeline stage budget) with
 // a per-call timeout, so EITHER firing cancels the in-flight request promptly.
 function withTimeoutSignal(external, timeoutMs, timeoutMsg) {
@@ -204,11 +220,22 @@ async function chat({ system, user, jsonMode = false, temperature, model, stage,
     { role: "system", content: system },
     { role: "user", content: user },
   ];
-  const timeoutMs = Math.max(10_000, Number(config.llm.requestTimeoutMs) || 90_000);
+  // Per-stage timeout: the composer authors a ~25KB document from a ~140KB
+  // prompt and is legitimately slow (deepseek ~170s) — a flat 180s times it out
+  // and re-sends the giant prompt on retry. Heavy stages get a longer ceiling.
+  const timeoutMs = Math.max(
+    10_000,
+    Number(config.llm.requestTimeoutByStage?.[stage]) || Number(config.llm.requestTimeoutMs) || 90_000
+  );
+
+  // Per-stage temperature: a distilled, decision-table-driven stage (composer)
+  // should TRANSCRIBE its recipe, not improvise — low temp makes a cheap model
+  // copy defaults instead of inventing variance. Explicit caller arg always wins.
+  const effTemp = temperature ?? config.llm.temperatureByStage?.[stage] ?? config.llm.temperature;
 
   const orBody = {
     messages,
-    temperature: temperature ?? config.llm.temperature,
+    temperature: effTemp,
     // Explicit output ceiling: OpenRouter pre-charges affordability against
     // max_tokens (default 65k), so an explicit cap keeps requests viable as
     // the daily credit limit depletes — and bounds runaway reasoning.
@@ -229,7 +256,7 @@ async function chat({ system, user, jsonMode = false, temperature, model, stage,
   // external signal fired (the whole stage is being cancelled; don't start more work).
   if (kieEnabled) {
     try {
-      return await callKie({ messages, jsonMode, temperature, timeoutMs, stage, signal });
+      return await callKie({ messages, jsonMode, temperature: effTemp, timeoutMs, stage, signal });
     } catch (err) {
       if (signal?.aborted) throw err;
       console.warn(`[llm] KIE primary failed (${err?.status || err?.message || err}); falling back to OpenRouter ${orPrimary}`);
@@ -241,7 +268,10 @@ async function chat({ system, user, jsonMode = false, temperature, model, stage,
     return await callOnce({ body: orBody, timeoutMs, stage, model: orPrimary, signal });
   } catch (err) {
     if (signal?.aborted) throw err;
-    if (!orFallback || orFallback === orPrimary || !isRetryable(err)) throw err;
+    // Escalate to the fallback model on a transient error OR a model-fatal one
+    // (bad id / context overflow) — the latter won't recover by retrying the
+    // same model but a different model can, so it must not collapse the stage.
+    if (!orFallback || orFallback === orPrimary || !(isRetryable(err) || isModelFatal(err))) throw err;
     // 3. FALLBACK: OpenRouter secondary model.
     console.warn(`[openrouter] FALLBACK: ${orPrimary} failed; switching to ${orFallback} for stage=${stage}`);
     try {

@@ -6,7 +6,17 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
 
+const config = require("../config");
+
 const WINDOWS = process.platform === "win32";
+
+// Pin lint + inspect to the SAME hyperframes the renderer uses, so the safety
+// gate validates against the exact engine that renders the MP4 (different
+// versions can carry different lint/occlusion rules) and a cold box can't fetch
+// a newer `latest` mid-run. Mirrors renderer.js's pin.
+const HF_SPEC = config.render?.hyperframesVersion
+  ? `hyperframes@${config.render.hyperframesVersion}`
+  : "hyperframes";
 
 function writeFiles(jobDir, { indexHtml, metaJson }) {
   fs.mkdirSync(jobDir, { recursive: true });
@@ -18,7 +28,7 @@ function runLint(jobDir) {
   return new Promise((resolve) => {
     const cmd = WINDOWS ? "npx.cmd" : "npx";
     // Node ≥18.20 throws EINVAL spawning .cmd files without a shell (CVE-2024-27980).
-    const p = spawn(cmd, ["--yes", "hyperframes", "lint"], {
+    const p = spawn(cmd, ["--yes", HF_SPEC, "lint"], {
       cwd: jobDir,
       env: process.env,
       shell: WINDOWS,
@@ -66,7 +76,7 @@ function runLint(jobDir) {
 function runInspect(jobDir) {
   return new Promise((resolve) => {
     const cmd = WINDOWS ? "npx.cmd" : "npx";
-    const p = spawn(cmd, ["--yes", "hyperframes", "inspect", "--json", "--at-transitions", "--tolerance", "4", "."], {
+    const p = spawn(cmd, ["--yes", HF_SPEC, "inspect", "--json", "--at-transitions", "--tolerance", "4", "."], {
       cwd: jobDir,
       env: process.env,
       shell: WINDOWS,

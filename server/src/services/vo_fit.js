@@ -94,7 +94,7 @@ async function synthesizeFitted({ text, targetSec, voice, instructions, outputPa
     console.log(`[vo_fit] scene VO ${dur.toFixed(1)}s > ${targetSec}s budget — tightening once`);
     try {
       const t = await tightenLine({ line: text, targetSec, signal });
-      if (tracker) tracker.addLlm({ inputTokens: t.tokensIn, outputTokens: t.tokensOut });
+      if (tracker) tracker.addLlm({ inputTokens: t.tokensIn, outputTokens: t.tokensOut, stage: "vo_fit" });
       await synthOnce({ text: t.line, voice, instructions, outputPath, tracker });
       dur = (await probeDurationSec(outputPath)) ?? targetSec;
       spokenText = t.line;

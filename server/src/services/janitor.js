@@ -6,6 +6,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const config = require("../config");
+const db = require("../db");
 
 const INTERVAL_MS = 10 * 60 * 1000;
 const JOB_DIR_TTL_MS = 60 * 60 * 1000;
@@ -38,6 +39,13 @@ function sweepJobDirs(now) {
     const st = statOr(full);
     if (!st) continue;
     if (now - st.mtimeMs > JOB_DIR_TTL_MS) {
+      // Never delete a job still in flight or paused awaiting human script
+      // approval — its dir holds the real website screenshots/assets it will
+      // render from. Only terminal jobs (done/failed) and unknown/stale dirs
+      // are debug junk safe to sweep.
+      let job = null;
+      try { job = db.getRaw(ent.name); } catch { /* unknown dir — sweep it */ }
+      if (job && job.status !== "done" && job.status !== "failed") continue;
       rmDir(full);
       removed++;
     }

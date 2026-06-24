@@ -42,7 +42,9 @@ async function generateBrief({ intent, signal }) {
   const packs = frameRegistry.listPacks();
   const availableFramePacks = packs.map((name) => ({
     name,
-    vibe: PACK_VIBES[name] || "a curated design system",
+    // Hard-coded blurb first, else derive a one-liner from the pack's FRAME.md
+    // so the brief LLM can match tone -> pack for ALL packs (not just 3 of 10).
+    vibe: PACK_VIBES[name] || frameRegistry.getPackVibe(name) || "a curated design system",
   }));
 
   const user = JSON.stringify({ ...intent, availableFramePacks }, null, 2);

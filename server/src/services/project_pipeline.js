@@ -95,7 +95,11 @@ async function runIntake({ jobId, onApproved, skipBrief = false }) {
         job.website_title = website.title;
       }
       if (video) intent.video = video;
-      intent.__ingested = true;
+      // Mark ingest "done" ONLY when a worker actually produced signal. Caching a
+      // transient website/transcribe failure as done would permanently strip the
+      // real screenshots / brand colors / transcript on every later regenerate;
+      // leaving it unset lets the next run retry and recover the on-brand assets.
+      if (website || video) intent.__ingested = true;
       job.intent = intent; // persist enriched intent for regenerate runs
       timings.ingestMs = ms() - t0;
 
@@ -113,7 +117,7 @@ async function runIntake({ jobId, onApproved, skipBrief = false }) {
       const t0 = ms();
       db.setProgress(jobId, "brief");
       const briefRes = await withBudget((signal) => generateBrief({ intent, signal }), intakeBudgetMs, "brief stage");
-      tracker.addLlm({ inputTokens: briefRes.tokensIn, outputTokens: briefRes.tokensOut });
+      tracker.addLlm({ inputTokens: briefRes.tokensIn, outputTokens: briefRes.tokensOut, stage: "brief" });
       timings.briefMs = ms() - t0;
       brief = briefRes.brief;
     }
@@ -124,7 +128,7 @@ async function runIntake({ jobId, onApproved, skipBrief = false }) {
     const tScript = ms();
     db.setProgress(jobId, "script");
     const scriptRes = await withBudget((signal) => generateScript({ brief, signal }), intakeBudgetMs, "script stage");
-    tracker.addLlm({ inputTokens: scriptRes.tokensIn, outputTokens: scriptRes.tokensOut });
+    tracker.addLlm({ inputTokens: scriptRes.tokensIn, outputTokens: scriptRes.tokensOut, stage: "script" });
     timings.scriptMs = ms() - tScript;
 
     db.markScriptReview(jobId, {
@@ -355,7 +359,7 @@ async function runProduction({ jobId }) {
       db.setProgress(jobId, "storyboard");
       const sbPrompt = storyboardPromptFromScript(script, brief);
       const sbRes = await generateStoryboard({ prompt: sbPrompt, duration, orientation: job.orientation });
-      tracker.addLlm({ inputTokens: sbRes.tokensIn, outputTokens: sbRes.tokensOut });
+      tracker.addLlm({ inputTokens: sbRes.tokensIn, outputTokens: sbRes.tokensOut, stage: "storyboard" });
       markStage("storyboard", t0);
 
       db.setProgress(jobId, "assets");
@@ -486,10 +490,25 @@ async function runProduction({ jobId }) {
       stageTimings: timings,
       finalAttempt,
     });
-    console.log(`[project] ${jobId} done — attempt=${finalAttempt}, cost=$${costs.totalCostUsd}`);
+    const ttsTok = (costs.tts.inputTokensEst || 0) + (costs.tts.outputTokensEst || 0);
+    const totalTok = costs.llm.inputTokens + costs.llm.outputTokens + ttsTok;
+    console.log(
+      `[project] ${jobId} done — attempt=${finalAttempt}, ` +
+      `tokens=${totalTok.toLocaleString()} (LLM ${costs.llm.inputTokens.toLocaleString()} in / ${costs.llm.outputTokens.toLocaleString()} out over ${costs.llm.callCount} calls, TTS ${ttsTok.toLocaleString()}), ` +
+      `cost=$${costs.totalCostUsd}`
+    );
+    if (costs.byStage?.length) {
+      const perStage = costs.byStage
+        .map((s) => `${s.stage} ${s.totalTokens.toLocaleString()}tok×${s.callCount} $${s.costUsd}`)
+        .join("  |  ");
+      console.log(`[project] ${jobId} per-stage: ${perStage}`);
+    }
   } catch (err) {
     console.error(`[project] ${jobId} production failed: ${err.message}`);
     const costs = tracker.computeCosts();
+    const totalTok = costs.llm.inputTokens + costs.llm.outputTokens
+      + (costs.tts.inputTokensEst || 0) + (costs.tts.outputTokensEst || 0);
+    console.log(`[project] ${jobId} FAILED — tokens=${totalTok.toLocaleString()} consumed before failure, cost=$${costs.totalCostUsd}`);
     db.markFailed(jobId, err.message.slice(0, 2000), costs.llm.inputTokens, costs.llm.outputTokens, costs, timings);
   }
 }

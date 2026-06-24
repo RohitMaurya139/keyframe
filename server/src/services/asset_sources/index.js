@@ -53,9 +53,18 @@ async function acquire({ query, fallbackQueries = [], type, orientation, outputP
     for (const q of queries) {
       const hits = curated.search({ query: q, type, limit: 8, kindPref, excludeIds });
       if (hits.length) {
-        const meta = curated.materialize(hits[0], outputPath);
+        // Variety: sample among the top relevant matches instead of always
+        // returning hits[0]. Always picking the single best hit is the #1 reason
+        // "every video uses the same images" — the same query (e.g. "shopping",
+        // "headphones") deterministically resolved to the identical file across
+        // every generation. Sampling the strongest few keeps relevance while
+        // giving each video (and each regenerate) a fresh look. excludeIds (passed
+        // through to search) still prevents reusing a file already used this video.
+        const pool = hits.slice(0, Math.min(hits.length, 4));
+        const pick = pool[Math.floor(Math.random() * pool.length)];
+        const meta = curated.materialize(pick, outputPath);
         if (tracker) tracker.addExternal("asset_library_hit");
-        return { path: meta.path, query: q, fromCache: true, libraryId: hits[0].id, ...meta };
+        return { path: meta.path, query: q, fromCache: true, libraryId: pick.id, ...meta };
       }
     }
   }

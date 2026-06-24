@@ -20,7 +20,7 @@ const { generateStoryboard } = require("./storyboard");
 const { compose } = require("./composer");
 const { validate, runInspect } = require("./validator");
 const { runtimeCheck } = require("./runtime_check");
-const { normalizeComposition } = require("./normalize");
+const { normalizeComposition, stripMissingAssets } = require("./normalize");
 const { render } = require("./renderer");
 const { buildFallback } = require("./fallback");
 const { planAudio } = require("./audio_planner");
@@ -70,7 +70,7 @@ async function planAndFetchAssets({ jobDir, storyboard, flags, orientation, trac
   const { plan, tokensIn, tokensOut, error } = await planAssets(storyboard, {
     images: flags.images, video: flags.video,
   });
-  tracker.addLlm({ inputTokens: tokensIn, outputTokens: tokensOut });
+  tracker.addLlm({ inputTokens: tokensIn, outputTokens: tokensOut, stage: "assets" });
 
   if (error) {
     console.warn(`[pipeline] asset planner failed (${error}); continuing without visuals`);
@@ -138,6 +138,15 @@ async function gateComposition({ files, jobDir, tracker, label }) {
     console.log(`[pipeline] normalized ${label}: ${norm.changed.join(", ")}`);
   }
 
+  // Backstop: drop any <img>/<video> pointing at a local file that wasn't
+  // actually fetched (the composer occasionally invents 3.jpg/4.jpg) — prevents
+  // broken/blank images and a wasted "missing asset" lint repair lap.
+  const strip = stripMissingAssets(files.indexHtml, jobDir);
+  if (strip.removed) {
+    files.indexHtml = strip.html;
+    console.log(`[pipeline] stripped ${strip.removed} <img>/<video> with a missing local src (${label})`);
+  }
+
   try {
     const r = await catalog.installReferencedBlocks(files.indexHtml, jobDir);
     if (r.installed.length) tracker.addExternal("catalog_install");
@@ -190,34 +199,58 @@ async function composeWithLintRepair({ storyboard, dims, jobDir, availableAssets
   const maxRepairs = Math.max(1, Number(config.llm.composerLintRepairs) || 2);
 
   let feedback = null;
-  let lastFiles = null;
-  let lastInspectOnly = false;
+  // Best lint+runtime-clean, occlusion-only lap (NORMALIZED, post-gate). Snapshot
+  // it so that on exhaustion we ship the RICH asset-ful comp with only a residual
+  // decorative overlap — never strip it. gateComposition writes each lap to disk,
+  // so on exhaustion we must re-persist the best snapshot (a later regressing lap
+  // may have overwritten index.html); render() reads jobDir/index.html.
+  let bestInspectFiles = null;
   for (let lap = 0; lap <= maxRepairs; lap++) {
     const label = lap === 0 ? "first pass" : `repair ${lap}/${maxRepairs}`;
     console.log(`[pipeline] composeWithLintRepair: composer (${label})`);
     const sb = feedback ? { ...storyboard, __lintFeedback: feedback } : storyboard;
-    const files = await compose(sb, {
-      width: dims.width, height: dims.height, fps: dims.fps,
-      duration: storyboard.durationSec,
-      maxRetries: lap === 0 ? config.llm.composerMaxRetries : 1,
-      availableAssets, abortSignal, framePack, captionCues,
-    });
-    tracker.addLlm({ inputTokens: files.tokensIn, outputTokens: files.tokensOut });
-    lastFiles = files;
+    let files;
+    try {
+      files = await compose(sb, {
+        width: dims.width, height: dims.height, fps: dims.fps,
+        duration: storyboard.durationSec,
+        maxRetries: lap === 0 ? config.llm.composerMaxRetries : 1,
+        availableAssets, abortSignal, framePack, captionCues,
+      });
+    } catch (e) {
+      // A REPAIR lap that hard-fails (e.g. a transient 403/timeout on the
+      // composer) must NOT discard a good earlier lap and collapse to the bland
+      // deterministic template. If we already captured a lint+runtime-clean
+      // (occlusion-only) composition, ship THAT — a real, rich comp with a
+      // residual decorative overlap beats the fallback every time.
+      if (lap > 0 && bestInspectFiles) {
+        console.warn(`[pipeline] repair lap ${lap} compose failed (${String(e.message).slice(0, 140)}) — shipping best earlier lap instead of the bland fallback`);
+        break;
+      }
+      throw e; // lap 0 failed with no good comp yet — let the caller fall back
+    }
+    tracker.addLlm({ inputTokens: files.tokensIn, outputTokens: files.tokensOut, stage: "composer" });
 
     const res = await gateComposition({ files, jobDir, tracker, label });
     if (res.ok) return { files };
+    // inspectOnly => lint + runtime PASSED, only spatial overlap remains. Snapshot
+    // the NORMALIZED html (gateComposition mutated files.indexHtml in place).
+    if (res.inspectOnly && !bestInspectFiles) {
+      bestInspectFiles = { indexHtml: files.indexHtml, metaJson: files.metaJson };
+    }
     feedback = res.feedback;
-    lastInspectOnly = !!res.inspectOnly;
     if (lap < maxRepairs) console.warn(`[pipeline] attempting repair (lap ${lap + 1}/${maxRepairs})`);
   }
 
-  // Exhausted repair laps. If the ONLY remaining problem is spatial overlap
-  // (lint + runtime passed), SHIP the real composition — an imperfect-but-rich
-  // render beats the bland deterministic fallback (mirrors graph.js QA policy).
-  if (lastInspectOnly && lastFiles) {
-    console.warn(`[pipeline] shipping composition despite residual spatial-overlap warnings after ${maxRepairs} lap(s) — real comp beats fallback`);
-    return { files: lastFiles };
+  // Exhausted repair laps. Ship the BEST asset-ful, lint+runtime-clean,
+  // occlusion-only lap — a rich comp with a residual decorative overlap beats the
+  // bland fallback. Re-persist to disk: render() reads jobDir/index.html and a
+  // later regressing lap may have overwritten it.
+  if (bestInspectFiles) {
+    fs.writeFileSync(path.join(jobDir, "index.html"), bestInspectFiles.indexHtml, "utf8");
+    fs.writeFileSync(path.join(jobDir, "meta.json"), bestInspectFiles.metaJson, "utf8");
+    console.warn(`[pipeline] shipping best asset-ful occlusion-only lap after ${maxRepairs} lap(s) — real comp beats fallback`);
+    return { files: bestInspectFiles };
   }
   // A composition that still trips lint/runtime renders wrong or blank — worse
   // than the deterministic fallback. Let the caller escalate.
@@ -246,7 +279,7 @@ async function buildAudio({ jobDir, storyboard, flags, tracker }) {
   fs.mkdirSync(audioDir, { recursive: true });
 
   const { plan, tokensIn, tokensOut, error: planErr } = await planAudio(storyboard, flags);
-  tracker.addLlm({ inputTokens: tokensIn, outputTokens: tokensOut });
+  tracker.addLlm({ inputTokens: tokensIn, outputTokens: tokensOut, stage: "audio" });
 
   if (planErr) {
     console.warn(`[pipeline] audio planner failed: ${planErr}. Skipping audio.`);
@@ -357,7 +390,7 @@ async function runJob({
       const t0 = ms();
       db.setProgress(jobId, "storyboard");
       sbRes = await generateStoryboard({ prompt, duration, orientation });
-      tracker.addLlm({ inputTokens: sbRes.tokensIn, outputTokens: sbRes.tokensOut });
+      tracker.addLlm({ inputTokens: sbRes.tokensIn, outputTokens: sbRes.tokensOut, stage: "storyboard" });
       markStage("storyboard", t0);
       console.log(`[pipeline] storyboard completed in ${timings.storyboardMs}ms`);
     }
@@ -437,26 +470,12 @@ async function runJob({
       }
     }
 
-    // ---- Attempt 3: retry without any assets ----
-    if (!visualResult && allAssets.length > 0) {
-      const t0 = ms();
-      finalAttempt = "no-assets";
-      try {
-        visualResult = await withBudget(
-          (signal) => attemptLlmComposition({
-            storyboard: sbRes.storyboard, dims, jobDir,
-            assets: [], tracker, jobId, durationSec: duration,
-            label: "no-assets", abortSignal: signal, framePack,
-          }),
-          budget, "no-assets retry"
-        );
-        markStage("retry_no_assets", t0);
-        console.log(`[pipeline] asset-less retry succeeded in ${timings.retry_no_assetsMs}ms`);
-      } catch (e3) {
-        markStage("retry_no_assets", t0);
-        console.warn(`[pipeline] asset-less retry failed (${e3.message.slice(0, 200)}). Using polished fallback.`);
-      }
-    }
+    // ---- Attempt 3 REMOVED ----
+    // The old no-assets recompose STRIPPED ALL images on any failure and shipped a
+    // barren slideshow — the direct cause of "lack of images/assets" videos. It is now
+    // redundant: occlusion-exhaustion ships the best asset-ful occlusion-only lap (see
+    // composeWithLintRepair), and lint/runtime exhaustion falls to buildFallback below,
+    // which KEEPS the photos (assets: allAssets). Images are never stripped to clear overlap.
 
     // ---- Attempt 4: polished deterministic fallback ----
     if (!visualResult) {

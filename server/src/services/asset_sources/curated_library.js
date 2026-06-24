@@ -105,6 +105,28 @@ function load() {
 
 const KIND_PREF = { photo: 3, illustration: 2, vector: 1 };
 
+// Generic business/abstract words that name many library topic folders. A query
+// word landing on one of these ALONE is NOT topical relevance — it's how a
+// beauty-marketplace video pulled trading charts ("growth"/"trading") and a
+// Jaguar logo ("logo"/"profit"). A match must hit a CONTENT word, not just one
+// of these, to count as strong.
+const GENERIC_TOPIC = new Set([
+  "logo", "logos", "profit", "growth", "trading", "trade", "business",
+  "market", "marketing", "finance", "financial", "money", "success",
+  "corporate", "abstract", "concept", "idea", "ideas", "data", "chart",
+  "charts", "graph", "analytics", "strategy", "company", "startup",
+  "office", "work", "team", "design", "modern", "creative", "digital",
+  "technology", "background", "presentation", "dynamic", "generic",
+  // Finance/business vocabulary that names many library folders and keeps
+  // pulling stock-market/crypto/hustle imagery into UNRELATED videos via
+  // polysemy ("stock" = inventory vs stock market). A video that is genuinely
+  // about finance carries those words in its ANCHOR and still gets on-topic
+  // results from web search — only the off-topic curated leak is suppressed.
+  "stock", "income", "hustle", "side", "investment", "investor", "investing",
+  "wealth", "cash", "bank", "banking", "crypto", "cryptocurrency", "nft",
+  "forex", "economy", "economic", "revenue", "sales", "earnings", "screen",
+]);
+
 // Search the library. `type` is the composer asset type ("image" | "video").
 // The library holds only stills, so video requests return nothing (caller
 // falls through to providers). `kindPref` biases photo vs illustration/vector.
@@ -139,17 +161,24 @@ function search({ query, type = "image", limit = 8, kindPref, excludeIds } = {})
   for (const e of idx) {
     if (skip && skip.has(e.id)) continue;
     if (restrictKind && e.kind !== restrictKind) continue;
-    let overlap = 0, topicHit = 0;
+    let overlap = 0, topicHit = 0, contentHit = 0;
     for (const w of want) {
-      if (e.words.includes(w)) overlap++;
-      if (e.topics.some((t) => t.includes(w))) topicHit++;
+      const inWords = e.words.includes(w);
+      const inTopic = e.topics.some((t) => t.includes(w));
+      if (inWords) overlap++;
+      if (inTopic) topicHit++;
+      // A CONTENT match = a real subject word (not "logo"/"growth"/"profit")
+      // matching the entry by filename token OR topic folder.
+      if ((inWords || inTopic) && !GENERIC_TOPIC.has(w)) contentHit++;
     }
     if (!overlap) continue;
     const ratio = overlap / want.length;
-    // Strong-overlap requirement: keep only entries that either land on a
-    // topic segment, or (multi-word query) cover at least half the terms.
-    // Single-word queries must hit a topic to count as relevant.
-    const strong = topicHit > 0 || (multi ? ratio >= 0.5 : false);
+    // REQUIRE at least one content match. A query whose only overlaps are
+    // generic business words (logo/profit/growth/trading) is rejected outright —
+    // that is exactly what returned trading charts and a Jaguar logo for a
+    // beauty-marketplace video. Rejected matches fall through to topical web
+    // search. (multi/ratio still rank the survivors via `score` below.)
+    const strong = contentHit > 0 && (topicHit > 0 || !multi || ratio >= 0.5);
     if (!strong) continue;
     const kindBias = (kindPref && e.kind === kindPref ? 8 : 0) + (KIND_PREF[e.kind] || 0);
     const score = overlap * 10 + topicHit * 6 + ratio * 4 + kindBias;

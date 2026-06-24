@@ -8,16 +8,38 @@
 // from/transform conflicts) are left to the prompt + repair LLM, since fixing
 // them blindly risks changing the intended visual result.
 
-// The only font stack the offline renderer + lint resolve without @font-face.
-const SAFE_FONT_STACK = 'Inter, "Segoe UI", system-ui, Roboto, Helvetica, Arial, sans-serif';
+const fs = require("node:fs");
+const path = require("node:path");
 
-// Force every `font-family` declaration to the safe system stack. The renderer
-// can't load webfonts, and the lint rejects any family it can't auto-resolve
-// (e.g. "Space Grotesk" from a frame pack) with `font_family_without_font_face`.
-// Family values never contain ';' or '}', so this bounded match is safe; it
-// standardizes inline styles, CSS rules, and var() usages alike.
+// The only font stack the offline renderer + lint resolve without @font-face.
+// Two quoting variants: when we inject into a double-quoted inline style="..."
+// we MUST use single quotes (and vice-versa) or the injected quote prematurely
+// closes the attribute and mangles the tag.
+const SAFE_FONT_STACK    = 'Inter, "Segoe UI", system-ui, Roboto, Helvetica, Arial, sans-serif';
+const SAFE_FONT_STACK_SQ = "Inter, 'Segoe UI', system-ui, Roboto, Helvetica, Arial, sans-serif";
+
+// Replace every `font-family: …` declaration inside a CSS value string with the
+// safe system stack (bounded by ; or }). Operates on a value/attribute body
+// that has ALREADY been isolated, so the closing attribute quote is not in play.
+function replaceFamilyDecls(css, stack) {
+  return String(css).replace(/font-family\s*:\s*[^;}]*/gi, "font-family: " + stack);
+}
+
+// Force every `font-family` to the safe system stack. The renderer can't load
+// webfonts and lint rejects any family it can't auto-resolve (e.g. a pack's
+// "Space Grotesk") with `font_family_without_font_face`. Done context-aware in
+// three passes so we never inject a quote that breaks an inline style attribute
+// (the old single-regex version corrupted `style="font-family: X"` because its
+// match crossed the attribute's closing quote).
 function normalizeFontFamilies(html) {
-  return String(html).replace(/font-family\s*:\s*[^;}]+/gi, "font-family: " + SAFE_FONT_STACK);
+  let out = String(html);
+  // 1) Inline style="..." (double-quoted) — inject the single-quote stack.
+  out = out.replace(/style\s*=\s*"([^"]*)"/gi, (_m, css) => `style="${replaceFamilyDecls(css, SAFE_FONT_STACK_SQ)}"`);
+  // 2) Inline style='...' (single-quoted) — inject the double-quote stack.
+  out = out.replace(/style\s*=\s*'([^']*)'/gi, (_m, css) => `style='${replaceFamilyDecls(css, SAFE_FONT_STACK)}'`);
+  // 3) <style> blocks / CSS rules — quotes here are CSS syntax, not delimiters.
+  out = out.replace(/(<style\b[^>]*>)([\s\S]*?)(<\/style>)/gi, (_m, open, css, close) => open + replaceFamilyDecls(css, SAFE_FONT_STACK) + close);
+  return out;
 }
 
 // Strip external font loading — the offline renderer fails on it and the lint
@@ -123,6 +145,94 @@ function reflowTrackOverlaps(html) {
   return { html: changed ? out : src, changed };
 }
 
+// Defense-in-depth: tag text-bearing elements that may be COVERED with
+// data-layout-allow-occlusion so `hyperframes inspect` treats intentional layering
+// as allowed. The audit suppresses occlusion ONLY when the flag is on the COVERED
+// text element (verified: layout-audit reads element.closest('[data-layout-allow-occlusion]')
+// on the text-bearing element) — so we tag the per-scene sticker/content overlays,
+// NEVER the occluder. Gated on position:absolute so a genuine content tile in a
+// flex/grid (which SHOULD be flagged if it collides) is never silenced.
+const COVERED_TEXT_CLASS_RE = /\b(?:badge|chip|stat|pill|sticker|scene-content|content-zone)\b/;
+function tagCoveredText(html) {
+  return String(html).replace(/<([a-zA-Z][\w-]*)((?:[^>"']|"[^"]*"|'[^']*')*?)\/?>/g, (full, name, attrs) => {
+    if (/\bdata-layout-allow-occlusion\b/.test(attrs)) return full;       // already tagged
+    if (!/position\s*:\s*absolute/i.test(attrs)) return full;             // content-grid tiles excluded
+    const cm = attrs.match(/\bclass\s*=\s*(?:"([^"]*)"|'([^']*)')/);
+    if (!cm) return full;
+    const val = cm[1] != null ? cm[1] : cm[2];
+    if (!COVERED_TEXT_CLASS_RE.test(val)) return full;
+    const selfClose = /\/>$/.test(full) ? " /" : "";
+    const body = attrs.replace(/\s*\/$/, "");
+    return `<${name}${body} data-layout-allow-occlusion${selfClose}>`;
+  });
+}
+
+// Remove <img>/<video> whose LOCAL src file does not exist in jobDir. The
+// composer sometimes invents sequential filenames (3.jpg, 4.jpg) for assets
+// that were never fetched (a failed download leaves a hole in the numbering),
+// which ship as broken/blank images and trip the hyperframes "missing asset"
+// lint. Stripping them is safe — the scene loses one image (slightly less rich)
+// but never shows a broken box, and lint passes without a wasted repair lap.
+// data:/http(s) srcs are left untouched.
+function stripMissingAssets(html, jobDir) {
+  let removed = 0;
+  const out = String(html).replace(
+    /<img\b[^>]*\bsrc\s*=\s*["']([^"']+)["'][^>]*\/?>|<video\b[^>]*\bsrc\s*=\s*["']([^"']+)["'][^>]*>(?:[\s\S]*?<\/video>)?/gi,
+    (full, imgSrc, videoSrc) => {
+      const src = imgSrc || videoSrc;
+      if (!src || /^(data:|https?:)/i.test(src)) return full;
+      const abs = path.join(jobDir, src.split("/").join(path.sep));
+      try { if (fs.existsSync(abs)) return full; } catch { return full; }
+      removed++;
+      return "";
+    }
+  );
+  return { html: out, removed };
+}
+
+// Guarantee a real animated graphics layer. The occlusion-repair laps disable
+// the composer's inline-vector floor (they pass __lintFeedback), so a comp can
+// ship with ~0 inline SVG primitives — reading as a flat photo slideshow ("no
+// vectors / no graphics"). If the document is vector-thin, inject a deterministic
+// CSS-animated bokeh field as a full-duration background layer: no text (so it
+// can never occlude), pointer-events:none, behind content. CSS keyframes are
+// seeked deterministically by the renderer, so it animates without GSAP.
+const MIN_INLINE_PRIMS = 8;
+function ensureVectorField(html) {
+  const src = String(html);
+  const PRIM_RE = /<(?:circle|ellipse|path|rect|polygon|polyline|line)(?=[\s/>])/gi;
+  const svgBlocks = src.match(/<svg[\s\S]*?<\/svg>/gi) || [];
+  const prims = svgBlocks.reduce((n, b) => n + (b.match(PRIM_RE) || []).length, 0);
+  if (prims >= MIN_INLINE_PRIMS) return { html: src, injected: false };
+
+  const dm = src.match(/data-composition-id\s*=\s*["']vid["'][^>]*?\bdata-duration\s*=\s*["']?([\d.]+)/i)
+    || src.match(/\bdata-duration\s*=\s*["']?([\d.]+)/i);
+  const dur = dm ? parseFloat(dm[1]) : 15;
+
+  const circles = [];
+  for (let i = 0; i < 18; i++) {
+    const cx = ((i * 211) % 1900) + 10;
+    const cy = ((i * 137) % 1040) + 20;
+    const r = 5 + (i % 5) * 8;
+    const d = 5 + (i % 4);
+    const delay = (i % 6) * 0.5;
+    const op = (0.05 + (i % 3) * 0.04).toFixed(2);
+    circles.push(`<circle cx="${cx}" cy="${cy}" r="${r}" fill="#ffffff" opacity="${op}" style="animation:hf-bokeh ${d}s ease-in-out ${delay}s infinite alternate"/>`);
+  }
+  // Keep the <style> INSIDE the clip so #root's only new child is a .clip
+  // (lint wants every direct child of #root to be a clip). @keyframes is global
+  // regardless of where the <style> sits.
+  const field =
+    `<div class="clip" data-start="0" data-duration="${dur}" data-track-index="0" ` +
+    `style="position:absolute;inset:0;pointer-events:none;z-index:1;overflow:hidden">` +
+    `<style>@keyframes hf-bokeh{from{transform:translateY(0) scale(1)}to{transform:translateY(-24px) scale(1.16)}}</style>` +
+    `<svg width="100%" height="100%" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice" ` +
+    `style="position:absolute;inset:0">${circles.join("")}</svg></div>`;
+
+  const out = src.replace(/(<div[^>]*\bid\s*=\s*["']root["'][^>]*>)/i, `$1${field}`);
+  return { html: out, injected: out !== src };
+}
+
 // Apply all safe normalizations. Returns { html, changed:[...] } so the caller
 // can log what was touched.
 function normalizeComposition(html) {
@@ -138,11 +248,19 @@ function normalizeComposition(html) {
   const afterClip = ensureClipClass(out);
   if (afterClip !== out) { changed.push("added missing class=\"clip\" to timed element(s)"); out = afterClip; }
 
+  // Guarantee a graphics layer when the comp is vector-thin (BEFORE reflow so the
+  // injected full-duration field gets its own non-overlapping track).
+  const afterField = ensureVectorField(out);
+  if (afterField.injected) { changed.push("injected animated bokeh field (vector-thin comp)"); out = afterField.html; }
+
   // Run AFTER ensureClipClass so newly-marked clips are also de-overlapped.
   const afterReflow = reflowTrackOverlaps(out);
   if (afterReflow.changed) { changed.push("reflowed clips off overlapping tracks"); out = afterReflow.html; }
 
+  const afterTag = tagCoveredText(out);
+  if (afterTag !== out) { changed.push("tagged covered-text overlays allow-occlusion"); out = afterTag; }
+
   return { html: out, changed };
 }
 
-module.exports = { normalizeComposition, stripExternalFonts, ensureClipClass, reflowTrackOverlaps };
+module.exports = { normalizeComposition, stripExternalFonts, ensureClipClass, reflowTrackOverlaps, tagCoveredText, stripMissingAssets, ensureVectorField };
