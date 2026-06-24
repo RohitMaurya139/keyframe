@@ -41,3 +41,7 @@ image.png
 **/image.png
 *.run.log
 server/public/showcase.mp4
+
+# render/debug scratch output (generated, not source)
+server/scrub/
+server/framecheck/occ_test/

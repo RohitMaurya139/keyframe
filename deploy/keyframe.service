@@ -1,0 +1,44 @@
+# KEYFRAME — systemd unit. Keeps the Express server (frontend + API + render
+# queue) running always-on, auto-restarting on crash or reboot.
+#
+# Install:
+#   sudo cp deploy/keyframe.service /etc/systemd/system/keyframe.service
+#   # edit User / WorkingDirectory / paths below if your layout differs, then:
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now keyframe
+#   sudo systemctl status keyframe        # check it's running
+#   journalctl -u keyframe -f             # live logs
+#
+# Secrets (API keys) are NOT set here — they live in server/.env (chmod 600,
+# gitignored), which the app loads itself via src/config.js. Only non-secret
+# operational env goes below.
+
+[Unit]
+Description=KEYFRAME video studio (Express + render queue)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/KEYFRAME/server
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+
+# Operational env (non-secret). Edit Chromium path to match oracle-setup.sh output
+# (/usr/bin/chromium-browser, /usr/bin/chromium, or /snap/bin/chromium).
+Environment=NODE_ENV=production
+Environment=PORT=8080
+Environment=NODE_OPTIONS=--max-old-space-size=4096
+Environment=JOB_CONCURRENCY=auto
+Environment=RENDER_WORKERS=auto
+Environment=RENDER_QUALITY=draft
+Environment=PUPPETEER_SKIP_DOWNLOAD=true
+Environment=PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
+# Give in-flight renders time to finish on stop/restart (matches the app's 30s drain).
+TimeoutStopSec=45
+
+[Install]
+WantedBy=multi-user.target
