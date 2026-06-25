@@ -5,7 +5,7 @@
    which survives the app's re-renders) and postMessage up to the React studio. */
 (function () {
   window.__kfHook = "ready";
-  try { parent.postMessage({ type: "kf-ready" }, "*"); } catch (e) {}
+  try { parent.postMessage({ type: "kf-ready" }, location.origin); } catch (e) {}
 
   function txt(n) { return (n.textContent || "").replace(/\s+/g, " ").trim(); }
   function readPrompt() { var ta = document.querySelector("textarea"); return ta ? (ta.value || "").trim() : ""; }
@@ -15,8 +15,8 @@
   var CREATE = /^(create film|produce|roll your (first )?film|create your film)/i;
   var GALLERY = /^gallery$/i;
 
-  function onCreate(e) { stop(e); try { parent.postMessage({ type: "kf-create", prompt: readPrompt(), url: readUrl() }, "*"); } catch (_) {} }
-  function onGallery(e) { stop(e); try { parent.postMessage({ type: "kf-gallery" }, "*"); } catch (_) {} }
+  function onCreate(e) { stop(e); try { parent.postMessage({ type: "kf-create", prompt: readPrompt(), url: readUrl() }, location.origin); } catch (_) {} }
+  function onGallery(e) { stop(e); try { parent.postMessage({ type: "kf-gallery" }, location.origin); } catch (_) {} }
 
   function hookButtons() {
     var els = document.querySelectorAll("button, a, [role=button]");

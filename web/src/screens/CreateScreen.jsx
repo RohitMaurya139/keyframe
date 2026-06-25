@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { createProject, listFrames } from "../api.js";
+import { createProject, listFrames, mediaUrl } from "../api.js";
 
 const TABS = [
   { key: "prompt", label: "Prompt" },
@@ -308,8 +308,8 @@ function TemplateCard({ auto, active, onClick, pack, fallback, isTouch }) {
         {!auto && pack.previewUrl ? (
           <video
             ref={vidRef}
-            src={pack.previewUrl}
-            poster={pack.posterUrl || undefined}
+            src={mediaUrl(pack.previewUrl)}
+            poster={mediaUrl(pack.posterUrl) || undefined}
             muted loop playsInline preload="metadata"
             className="w-full h-full object-cover"
           />

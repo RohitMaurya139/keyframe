@@ -61,6 +61,8 @@ export default function App() {
   // Listen for the landing iframe's bridge messages.
   useEffect(() => {
     const onMsg = (e) => {
+      // Only trust messages from our OWN same-origin landing iframe (/design.html).
+      if (e.origin !== window.location.origin) return;
       const d = e.data || {};
       if (d.type === "kf-create") startGeneration({ prompt: d.prompt, url: d.url });
       else if (d.type === "kf-gallery") go("gallery");
