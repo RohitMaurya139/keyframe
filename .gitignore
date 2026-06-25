@@ -45,3 +45,8 @@ server/public/showcase.mp4
 # render/debug scratch output (generated, not source)
 server/scrub/
 server/framecheck/occ_test/
+
+# stray debug screenshots + large showcase binaries (re-added)
+image copy*.png
+**/image copy*.png
+server/showcase/
