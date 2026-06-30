@@ -78,7 +78,10 @@ async function acquire({ query, fallbackQueries = [], type, orientation, outputP
   const useVision = type === "image" && visionTopic && config.assets?.visionRelevance !== false;
   const VISION_MAX = 2;
   let visionUsed = 0;
-  const shouldVision = (q) => useVision && q === query && visionUsed < VISION_MAX;
+  // Check the first VISION_MAX candidates across ANY query variant (the per-acquire
+  // budget is what bounds latency — restricting to the primary query let off-topic
+  // fallback-query hits slip past). Once spent, remaining candidates pass unchecked.
+  const shouldVision = () => useVision && visionUsed < VISION_MAX;
 
   // 0 — the curated local library (user's pre-loaded packs), stills only.
   // Highest priority: hand-picked, license-clean, offline. The file keeps its
@@ -108,7 +111,7 @@ async function acquire({ query, fallbackQueries = [], type, orientation, outputP
   for (const q of queries) {
     const hits = localDb.search({ query: q, type, orientation });
     for (const hit of hits) {
-      if (shouldVision(q)) {
+      if (shouldVision()) {
         visionUsed++;
         const fits = await imageFitsTopic({ imagePath: hit.file, topic: visionTopic, query: q, tracker });
         if (!fits) { console.log(`[assets] vision-rejected cached image for "${q}" (off-topic for the subject)`); continue; }
@@ -155,7 +158,7 @@ async function acquire({ query, fallbackQueries = [], type, orientation, outputP
         // VISION RELEVANCE — the model looks at the actual image (by URL, no download)
         // and rejects semantic misses the tag gate can't catch. Runs only on external
         // stock (curated/cache already passed their own relevance). Fail-open.
-        if (shouldVision(q)) {
+        if (shouldVision()) {
           visionUsed++;
           const fits = await imageFitsTopic({ imageUrl: c.url, topic: visionTopic, query: q, tracker });
           if (!fits) { console.log(`[assets] vision-rejected ${provider.name} image for "${q}" (off-topic for the subject)`); continue; }
