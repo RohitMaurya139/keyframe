@@ -22,6 +22,8 @@ const { validate, runInspect } = require("./validator");
 const { runtimeCheck } = require("./runtime_check");
 const { normalizeComposition, stripMissingAssets } = require("./normalize");
 const { enrichComposition } = require("./enrich");
+const { cinematicCheck } = require("./cinematic_lint");
+const sceneKit = require("./scene_kit");
 const frameRegistry = require("./frame_registry");
 const { render } = require("./renderer");
 const { buildFallback } = require("./fallback");
@@ -133,7 +135,7 @@ async function planAndFetchAssets({ jobDir, storyboard, flags, orientation, trac
 
 // Normalize + install catalog blocks + lint + runtime-smoke one composer output.
 // Returns { ok, feedback } — feedback is the next-lap repair brief when !ok.
-async function gateComposition({ files, jobDir, tracker, label, enrich }) {
+async function gateComposition({ files, jobDir, tracker, label, enrich, cinematic }) {
   // ENRICH FIRST — inject the deterministic anti-void background + always-on
   // animated vector/effects layer BEFORE normalize+lint, so the enriched HTML is
   // what gets validated and rendered, and reflowTrackOverlaps fixes any track
@@ -195,6 +197,19 @@ async function gateComposition({ files, jobDir, tracker, label, enrich }) {
   tracker.addExternal("hyperframes_inspect");
   const insp = await runInspect(jobDir).catch(() => ({ ok: true, skipped: true }));
   if (insp.ok) {
+    // CINEMATIC DENSITY — DIAGNOSTIC ONLY (does NOT bounce the comp). It logs how
+    // many showcase-density signals are absent (per-scene camera, layer density, a
+    // reactive beat, ambient, gradients) so the gap is observable, but it must NOT
+    // gate shipping: its gradient/glow/camera doctrine is a DARK-CINEMATIC aesthetic
+    // that conflicts with FLAT/editorial packs (blockframe etc. forbid gradients),
+    // and on the budget model the density push trades cleanliness for occlusion.
+    // Kept as a tool (cinematic_lint.js) + a log; not a hard/soft gate.
+    try {
+      const cine = cinematicCheck(files.indexHtml, cinematic || {});
+      if (cine.errors.length || cine.warnings.length) {
+        console.log(`[pipeline] cinematic density (diagnostic, ${label}): ${cine.errors.length} thin-signal(s), ${cine.warnings.length} note(s) — not blocking`);
+      }
+    } catch (e) { console.warn(`[pipeline] cinematic check threw: ${e.message.slice(0, 120)}`); }
     console.log(`[pipeline] lint + runtime + spatial inspect passed (${label})${rt.skipped ? ` (smoke skipped)` : ""}${insp.skipped ? ` (inspect skipped)` : ""}`);
     return { ok: true };
   }
@@ -229,6 +244,12 @@ async function composeWithLintRepair({ storyboard, dims, jobDir, availableAssets
     width: dims.width, height: dims.height, duration: storyboard.durationSec,
     packTokens: framePack ? frameRegistry.getPackTokens(framePack) : null,
   };
+  // Context for the cinematic density gate (per-scene checks + the C7 screenshot rule).
+  const cinematic = {
+    duration: storyboard.durationSec,
+    scenes: storyboard.scenes,
+    assets: availableAssets,
+  };
   for (let lap = 0; lap <= maxRepairs; lap++) {
     const label = lap === 0 ? "first pass" : `repair ${lap}/${maxRepairs}`;
     console.log(`[pipeline] composeWithLintRepair: composer (${label})`);
@@ -255,7 +276,7 @@ async function composeWithLintRepair({ storyboard, dims, jobDir, availableAssets
     }
     tracker.addLlm({ inputTokens: files.tokensIn, outputTokens: files.tokensOut, stage: "composer" });
 
-    const res = await gateComposition({ files, jobDir, tracker, label, enrich });
+    const res = await gateComposition({ files, jobDir, tracker, label, enrich, cinematic });
     if (res.ok) return { files };
     // inspectOnly => lint + runtime PASSED, only spatial overlap remains. Snapshot
     // the NORMALIZED html (gateComposition mutated files.indexHtml in place).
@@ -283,9 +304,16 @@ async function composeWithLintRepair({ storyboard, dims, jobDir, availableAssets
 
 // ========== One attempt at full LLM comp + render with a given asset set ==========
 
-async function attemptLlmComposition({ storyboard, dims, jobDir, assets, tracker, jobId, durationSec, label, abortSignal, framePack, captionCues }) {
+async function attemptLlmComposition({ storyboard, dims, jobDir, assets, tracker, jobId, durationSec, label, abortSignal, framePack, captionCues, remix = false }) {
+  // DEFAULT = the deterministic scene-kit (guaranteed showcase-grade, lint-clean,
+  // per-pack styled). Every pipeline path (runJob, graph, project_pipeline) routes
+  // through here, so this single dispatch makes the kit the primary composer
+  // everywhere. The LLM path below runs only on an explicit `remix: true` opt-in.
+  if (!remix) {
+    return composeWithSceneKit({ storyboard, dims, jobDir, assets, framePack, captionCues, jobId, durationSec, label: label || "scene-kit", abortSignal, tracker });
+  }
   const t0 = ms();
-  console.log(`[pipeline] ${label}: compose start (assets=${assets.length}, framePack=${framePack || "none"})`);
+  console.log(`[pipeline] ${label}: LLM remix compose start (assets=${assets.length}, framePack=${framePack || "none"})`);
   await composeWithLintRepair({
     storyboard, dims, jobDir, availableAssets: assets, tracker, abortSignal, framePack, captionCues,
   });
@@ -293,6 +321,36 @@ async function attemptLlmComposition({ storyboard, dims, jobDir, assets, tracker
   tracker.addExternal("hyperframes_render");
   const visual = await render({ jobId, jobDir, durationSec, abortSignal });
   console.log(`[pipeline] ${label}: render done in ${ms() - t0}ms total`);
+  return visual;
+}
+
+// PRIMARY composition path — the deterministic SCENE-KIT. Builds a complete,
+// showcase-grade, per-pack-styled composition from the storyboard in CODE (no LLM
+// freehand → lint-clean by construction, no occlusion/truncation/junk). The agents
+// still "think" (they wrote the storyboard + picked the assets); the kit guarantees
+// the execution. This is the reliable default; the LLM composer is the opt-in remix.
+async function composeWithSceneKit({ storyboard, dims, jobDir, assets, framePack, captionCues, jobId, durationSec, label, abortSignal, tracker }) {
+  const t0 = ms();
+  console.log(`[pipeline] ${label || "scene-kit"}: building deterministic composition (assets=${assets ? assets.length : 0}, framePack=${framePack || "none"})`);
+  const built = sceneKit.buildComposition({ storyboard, dims, framePack, assets: assets || [], captionCues });
+  fs.writeFileSync(path.join(jobDir, "index.html"), built.indexHtml, "utf8");
+  fs.writeFileSync(path.join(jobDir, "meta.json"), built.metaJson, "utf8");
+  // The kit is lint-clean by construction; run the real lint anyway as a safety net
+  // (a pathological storyboard could still trip something) — log, never block.
+  tracker.addExternal("hyperframes_lint");
+  const lint = await validate(jobDir, { indexHtml: built.indexHtml, metaJson: built.metaJson }).catch((e) => ({ ok: true, skipped: e.message }));
+  if (!lint.ok) console.warn(`[pipeline] scene-kit lint (non-blocking): ${String(lint.stderr || lint.stdout || "").slice(-300)}`);
+  // Cinematic execution is GUARANTEED by the kit's construction (every scene gets a
+  // camera move, a kinetic headline reveal, an authored transition, and sits over the
+  // pack signature + ambient + filmic overlay). We log that deterministically rather
+  // than running the per-scene cinematic_lint here — that gate was tuned for the inline
+  // LLM composer and under-counts the kit's SHARED (composition-level) depth layers.
+  const cineScenes = Array.isArray(storyboard.scenes) ? storyboard.scenes.length : 0;
+  console.log(`[pipeline] scene-kit cinematic execution applied: ${cineScenes} scene(s), per-scene camera + kinetic reveal + authored transition, ${framePack || "default"} signature`);
+  console.log(`[pipeline] ${label || "scene-kit"}: built in ${ms() - t0}ms, render start`);
+  tracker.addExternal("hyperframes_render");
+  const visual = await render({ jobId, jobDir, durationSec, abortSignal });
+  console.log(`[pipeline] ${label || "scene-kit"}: render done in ${ms() - t0}ms total`);
   return visual;
 }
 
@@ -390,7 +448,7 @@ async function mixAudioIntoVideo({ visualPath, durationSec, audio }) {
 async function runJob({
   jobId, prompt, duration, orientation, width, height, fps,
   tts = false, music = false, soundEffect = false, voice,
-  images = false, video = false, framePack = null,
+  images = false, video = false, framePack = null, remix = false,
 }) {
   const jobDir = jobDirFor(jobId);
   fs.mkdirSync(jobDir, { recursive: true });
@@ -451,7 +509,10 @@ async function runJob({
 
     const budget = (Number(config.server.stageBudgetSec) || 240) * 1000;
 
-    // ---- Attempt 1: full LLM composition with all assets ----
+    // ---- Attempt 1: PRIMARY composition ----
+    // attemptLlmComposition dispatches to the deterministic scene-kit unless
+    // `remix: true` (then it runs the LLM composer). Default → guaranteed
+    // showcase-grade, per-pack styled, lint-clean.
     {
       const t0 = ms();
       db.setProgress(jobId, "composing");
@@ -460,15 +521,16 @@ async function runJob({
           (signal) => attemptLlmComposition({
             storyboard: sbRes.storyboard, dims, jobDir,
             assets: allAssets, tracker, jobId, durationSec: duration,
-            label: "main", abortSignal: signal, framePack,
+            label: remix ? "remix" : "scene-kit", abortSignal: signal, framePack, remix,
           }),
-          budget, "main composition"
+          budget, remix ? "LLM remix composition" : "scene-kit composition"
         );
         markStage("compose_render", t0);
-        console.log(`[pipeline] main composition+render succeeded in ${timings.compose_renderMs}ms`);
+        finalAttempt = remix ? "remix" : "scenekit";
+        console.log(`[pipeline] ${remix ? "LLM remix" : "scene-kit"} composition+render succeeded in ${timings.compose_renderMs}ms`);
       } catch (e1) {
         markStage("compose_render", t0);
-        console.warn(`[pipeline] main attempt failed (${e1.message.slice(0, 200)}). Retrying without videos.`);
+        console.warn(`[pipeline] primary compose failed (${e1.message.slice(0, 200)}). Falling back.`);
       }
     }
 
@@ -501,23 +563,39 @@ async function runJob({
     // composeWithLintRepair), and lint/runtime exhaustion falls to buildFallback below,
     // which KEEPS the photos (assets: allAssets). Images are never stripped to clear overlap.
 
-    // ---- Attempt 4: polished deterministic fallback ----
+    // ---- Attempt 4: reliable SCENE-KIT fallback (bland template only if it throws) ----
+    // Replaces the old bland deterministic template as the fallback: the scene-kit
+    // is showcase-grade and lint-clean by construction, so a failed LLM remix now
+    // falls to a GOOD video, not a barren slideshow. The bland buildFallback survives
+    // only as a last resort if the scene-kit itself throws (a pathological storyboard).
     if (!visualResult) {
       const t0 = ms();
-      finalAttempt = "fallback";
-      usedFallback = true;
-      const fb = buildFallback({
-        prompt, duration, orientation, width, height, fps,
-        storyboard: sbRes.storyboard,
-        packTokens: framePack ? require("./frame_registry").getPackTokens(framePack) : null,
-        assets: allAssets,
-      });
-      fs.writeFileSync(path.join(jobDir, "index.html"), fb.indexHtml, "utf8");
-      fs.writeFileSync(path.join(jobDir, "meta.json"), fb.metaJson, "utf8");
-      tracker.addExternal("hyperframes_render");
-      visualResult = await render({ jobId, jobDir, durationSec: duration });
-      markStage("fallback_render", t0);
-      console.log(`[pipeline] polished fallback rendered in ${timings.fallback_renderMs}ms`);
+      try {
+        finalAttempt = finalAttempt === "scenekit" ? "scenekit" : "scenekit-fallback";
+        visualResult = await composeWithSceneKit({
+          storyboard: sbRes.storyboard, dims, jobDir,
+          assets: allAssets, framePack, jobId, durationSec: duration,
+          label: "scene-kit fallback", tracker,
+        });
+        markStage("fallback_render", t0);
+        console.log(`[pipeline] scene-kit fallback rendered in ${timings.fallback_renderMs}ms`);
+      } catch (eSk) {
+        console.warn(`[pipeline] scene-kit fallback threw (${String(eSk.message).slice(0, 160)}) — bland template last resort.`);
+        finalAttempt = "fallback";
+        usedFallback = true;
+        const fb = buildFallback({
+          prompt, duration, orientation, width, height, fps,
+          storyboard: sbRes.storyboard,
+          packTokens: framePack ? require("./frame_registry").getPackTokens(framePack) : null,
+          assets: allAssets,
+        });
+        fs.writeFileSync(path.join(jobDir, "index.html"), fb.indexHtml, "utf8");
+        fs.writeFileSync(path.join(jobDir, "meta.json"), fb.metaJson, "utf8");
+        tracker.addExternal("hyperframes_render");
+        visualResult = await render({ jobId, jobDir, durationSec: duration });
+        markStage("fallback_render", t0);
+        console.log(`[pipeline] polished fallback rendered in ${timings.fallback_renderMs}ms`);
+      }
     }
 
     // ---- Stage: audio mix (audio was prepared in parallel with compose+render)

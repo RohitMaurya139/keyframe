@@ -238,6 +238,16 @@
 
   window.__timelines = window.__timelines || {};
   window.__timelines["vid"] = tl;
+
+  // --- DEV PREVIEW ONLY ---------------------------------------------------
+  // Driven frame-by-frame by the HyperFrames renderer (timeline stays paused).
+  // Opened directly in a normal browser nothing plays it, so it looks blank.
+  // The render browser is automated (navigator.webdriver === true); auto-play
+  // ONLY when that flag is absent, so rendering/MP4 output is unaffected.
+  if (typeof navigator === "undefined" || !navigator.webdriver) {
+    tl.play(0);
+    tl.eventCallback("onComplete", function () { tl.restart(); }); // loop the preview
+  }
 </script>
 </body>
 </html>

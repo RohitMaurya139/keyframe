@@ -58,11 +58,16 @@ function search({ query, type, orientation, limit = 3 }) {
   const want = tokenize(query);
   if (!want.length) return [];
 
+  const tagMatch = (toks) => want.some((w) => toks.some((t) => t === w || (w.length >= 4 && (t.startsWith(w.slice(0, 4)) || w.startsWith(t.slice(0, 4))))));
   const scored = [];
   for (const e of idx) {
     if (type && e.type !== type) continue;
     if (orientation && e.orientation && e.orientation !== orientation && e.orientation !== "all") continue;
     if (!fs.existsSync(e.file)) continue;
+    // If we know the image's real subject tags, the query must overlap THEM (not just
+    // the query it was once fetched under) — rejects a "dragonfly" cached under a
+    // metaphorical "bloom" query. Tag-less legacy entries fall back to query overlap.
+    if (Array.isArray(e.tagWords) && e.tagWords.length && !tagMatch(e.tagWords)) continue;
     const overlap = want.filter((w) => e.words.includes(w)).length;
     if (overlap / want.length >= 0.6) scored.push({ score: overlap / want.length, entry: e });
   }
@@ -81,7 +86,7 @@ function materialize(entry, outputPath) {
 }
 
 // Register a freshly downloaded asset: copy into the cache and index it.
-function register({ filePath, query, type, orientation, source, license, sourceUrl, width, height }) {
+function register({ filePath, query, type, orientation, source, license, sourceUrl, width, height, tags }) {
   try {
     const idx = load();
     fs.mkdirSync(FILES_DIR, { recursive: true });
@@ -92,6 +97,10 @@ function register({ filePath, query, type, orientation, source, license, sourceU
     fs.copyFileSync(filePath, dest);
     idx.push({
       id, query, words: tokenize(query), type, orientation: orientation || "all",
+      // tagWords = the IMAGE's real subject tags (vs `words` = the query it was fetched
+      // for). Lets search() reject a cache hit whose actual subject is off-topic, the
+      // same way the live relevance gate does for fresh fetches.
+      tagWords: tags ? tokenize(tags) : [],
       source, license: license || "unknown", sourceUrl: sourceUrl || null,
       width: width || null, height: height || null,
       file: dest, bytes: fs.statSync(dest).size, addedAt: Date.now(), hits: 0,

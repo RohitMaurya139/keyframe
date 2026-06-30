@@ -191,6 +191,17 @@ function build() {
     cfg.server.renderQuality = process.env.RENDER_QUALITY;
   }
 
+  // Composer mode. USE_LLM_COMPOSER toggles the LLM composition agent on the
+  // agents graph. DEFAULT (OFF) makes the deterministic, cinematic scene-kit the
+  // PRIMARY composer — no composer LLM call, so the storyboard's authored motion
+  // intent (animation/layout/beats/transitionOut) is executed in code on every
+  // video. On the budget model the free-form LLM composer routinely ships a
+  // near-empty frame, so it is now an explicit opt-in "remix" only: set
+  // USE_LLM_COMPOSER=1 (or llm.useComposer=true in config.json) to enable it.
+  cfg.llm.useComposer = process.env.USE_LLM_COMPOSER != null
+    ? /^(1|true|yes|on)$/i.test(String(process.env.USE_LLM_COMPOSER))
+    : (cfg.llm.useComposer === true);
+
   validate(cfg);
 
   // Resolve paths relative to project root.

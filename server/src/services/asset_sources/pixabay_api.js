@@ -46,6 +46,7 @@ async function search({ query, type, orientation, limit = 5 }) {
       width: h.imageWidth, height: h.imageHeight,
       license: "Pixabay Content License",
       sourceUrl: h.pageURL,
+      tags: h.tags || "", // comma-separated subject tags → relevance scoring in acquire()
     })).filter((c) => c.url);
   }
 
@@ -63,6 +64,7 @@ async function search({ query, type, orientation, limit = 5 }) {
         width: pick.width, height: pick.height,
         license: "Pixabay Content License",
         sourceUrl: h.pageURL,
+        tags: h.tags || "",
       } : null;
     }).filter(Boolean);
   }

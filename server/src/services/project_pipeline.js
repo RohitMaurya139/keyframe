@@ -92,6 +92,7 @@ async function runIntake({ jobId, onApproved, skipBrief = false }) {
         };
         job.website_screenshot = website.screenshotPath;
         job.website_screenshots = website.screenshotPaths || (website.screenshotPath ? [website.screenshotPath] : []);
+        job.website_images = website.contentImages || [];
         job.website_title = website.title;
       }
       if (video) intent.video = video;

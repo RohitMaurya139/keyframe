@@ -133,11 +133,23 @@ async function scenePlannerAgent(s) {
 async function assetPlannerAgent(s) {
   const { job, script } = s;
   const videoOk = hasProviderFor("video");
-  const shots = (job.website_screenshots || []).filter((p) => { try { return fs.existsSync(p); } catch { return false; } });
-  const showcase = script.scenes.filter((x) => ["feature", "proof", "how", "context"].includes(x.purpose));
-  const targets = (showcase.length ? showcase : script.scenes.slice(1, -1)).slice(0, 3);
-  const screenshotPlan = shots.slice(0, targets.length).map((src, i) => ({ kind: "screenshot", src, scene: targets[i], index: i }));
+  const ex = (p) => { try { return fs.existsSync(p); } catch { return false; } };
+  const shots = (job.website_screenshots || []).filter(ex);
+  const realImgs = (job.website_images || []).filter(ex);
+  // REAL brand assets (the site's own screenshots + scraped content images) are pinned
+  // to the substance scenes BEFORE any generic stock is fetched — a real product shot
+  // always beats a random Pixabay photo. Use ALL captured screenshots (was capped at 3
+  // showcase scenes, which wasted the rest while stock filled the gaps).
+  const substance = script.scenes.slice(1, -1);
+  const showcase = substance.filter((x) => ["feature", "proof", "how", "context"].includes(x.purpose));
+  const shotTargets = (showcase.length ? showcase : substance);
+  const screenshotPlan = shots.slice(0, shotTargets.length).map((src, i) => ({ kind: "screenshot", src, scene: shotTargets[i], index: i }));
   const pinnedSceneIds = new Set(screenshotPlan.map((p) => p.scene.id));
+  // Scraped page images go into the general photo POOL (the kit weaves them into
+  // montage / b-roll / split), NOT bound to one scene — so they're used even when
+  // screenshots already took the substance scenes, and they DISPLACE generic stock
+  // instead of sitting unused.
+  const imagePlan = realImgs.slice(0, 6).map((src, i) => ({ src, index: i }));
 
   // Derive a concrete image query from a scene's visualDirection when the
   // script asked for nothing — substance scenes should never go imageless.
@@ -184,13 +196,21 @@ async function assetPlannerAgent(s) {
   // "icon" (the script schema allows type:"icon" with any role; keying only off
   // role missed those and fetched explicitly-requested icons as photos).
   const isVectorNeed = (n) => VECTOR_ROLES.has(roleOf(n)) || n.type === "icon";
+  // How much REAL brand material we have (site screenshots + scraped page images).
+  // When it's plentiful, we cap (or zero) the lower-quality stock sources below.
+  const realCount = shots.length + imagePlan.length;
   const videos = wants.filter((w) => w.need.type === "video").slice(0, 2);
   // Vectors get their OWN budget so a long photo list can't starve them — this
   // is what finally feeds the curated SVG library into films.
-  const vectors = wants.filter((w) => w.need.type !== "video" && isVectorNeed(w.need)).slice(0, 8);
-  const photos  = wants.filter((w) => w.need.type !== "video" && !isVectorNeed(w.need)).slice(0, 12 - videos.length);
+  const vectorCap = realCount >= 4 ? 3 : 8;
+  const vectors = wants.filter((w) => w.need.type !== "video" && isVectorNeed(w.need)).slice(0, vectorCap);
+  // Stock photos are the worst-quality source (the off-topic "old woman / suitcase /
+  // windmill" matches). Once we have enough REAL brand material — and motifs fill any
+  // bare text scene — fetch NO stock at all; with some real material, fetch only a couple.
+  const stockCap = realCount >= 4 ? 0 : realCount >= 2 ? 2 : (12 - videos.length);
+  const photos  = wants.filter((w) => w.need.type !== "video" && !isVectorNeed(w.need)).slice(0, stockCap);
   console.log(`[agents] asset_planner: ${screenshotPlan.length} screenshot(s) + ${videos.length} video(s) + ${photos.length} photo(s) + ${vectors.length} vector(s) (${wants.filter((w) => w.need.derived).length} derived)`);
-  return { assetPlan: { screenshots: screenshotPlan, searches: [...videos, ...photos, ...vectors] } };
+  return { assetPlan: { screenshots: screenshotPlan, realImages: imagePlan, searches: [...videos, ...photos, ...vectors] } };
 }
 
 // Asset Search — executes the plan: our database first, then providers.
@@ -220,6 +240,9 @@ function topicAnchor(job, brief) {
 async function assetSearchAgent(s) {
   const { job, jobDir, tracker, assetPlan } = s;
   const anchor = topicAnchor(job, s.brief);
+  // A concise subject sentence for the VISION relevance gate (what the video is about).
+  const visionTopic = [s.brief?.improvedPrompt, job.website_title, (s.brief?.keyMessages || []).slice(0, 2).join("; ")]
+    .filter(Boolean).join(" — ").slice(0, 300) || job.prompt || "";
   if (anchor) console.log(`[agents] asset_search topic anchor: "${anchor}"`);
   db.setProgress(job.id, "assets");
   fs.mkdirSync(path.join(jobDir, "assets", "images"), { recursive: true });
@@ -235,6 +258,20 @@ async function assetSearchAgent(s) {
       license: "owner content", sourceUrl: job.intent?.websiteUrl || null, source: "website", fromCache: false,
     };
   });
+
+  // Scraped REAL page images — pinned as PHOTOS (no browser frame). source is
+  // "website-image" so the scene-kit treats them as photos (montage/scrim/split),
+  // not screenshots, while still counting as real brand material over stock.
+  const pinnedImages = (assetPlan.realImages || []).map(({ src, index }) => {
+    const ext = (path.extname(src) || ".jpg").slice(0, 5);
+    const relPath = `assets/images/siteimg_${index}${ext}`;
+    try { fs.copyFileSync(src, path.join(jobDir, relPath)); } catch { return null; }
+    return {
+      path: relPath, type: "image", sceneId: null, style: "photo",
+      alt: `real image from the ${job.website_title || "product"} website`,
+      license: "owner content", sourceUrl: job.intent?.websiteUrl || null, source: "website-image", fromCache: false,
+    };
+  }).filter(Boolean);
 
   // Map a scene's asset role to the kind of curated asset that fits it:
   // full-bleed backgrounds want real photos; insets/icons/textures want
@@ -270,7 +307,7 @@ async function assetSearchAgent(s) {
       query, fallbackQueries: [need.query, ...fallbackQueriesFor(query)], type: isVideo ? "video" : "image",
       orientation: job.orientation, outputPath: path.join(jobDir, relPath), tracker,
       kindPref: isVideo ? undefined : (isIcon ? "vector" : kindPrefFor(need.role)),
-      excludeIds: usedLibraryIds,
+      excludeIds: usedLibraryIds, visionTopic,
     }).catch(() => null);
     if (!r) continue;
     if (r.libraryId) usedLibraryIds.add(r.libraryId);
@@ -283,7 +320,7 @@ async function assetSearchAgent(s) {
   }
   const got = results;
 
-  const assets = [...pinned, ...got];
+  const assets = [...pinned, ...pinnedImages, ...got];
   db.setAssets(job.id, assets);
   console.log(`[agents] asset_search: ${assets.length} asset(s) (${got.filter((a) => a.fromCache).length} from cache)`);
   return { assets };
@@ -358,13 +395,17 @@ async function compositionAgent(s) {
     : s.storyboard;
 
   const budget = (Number(config.server.stageBudgetSec) || 480) * 1000;
+  // PRIMARY composer = the LLM composition agent (remix), unless disabled via
+  // USE_LLM_COMPOSER=0 — then attemptLlmComposition dispatches the deterministic
+  // scene-kit directly. Either way the kit stays available as the fallback below.
+  const useComposer = config.llm.useComposer !== false;
   try {
     const visual = await withBudget(
       (signal) => attemptLlmComposition({
         storyboard, dims, jobDir, assets: s.assets || [], tracker,
         jobId: job.id, durationSec: job.duration,
         label: s.qa ? "graph-repair" : "graph-main", abortSignal: signal,
-        framePack: s.framePack, captionCues,
+        framePack: s.framePack, captionCues, remix: useComposer,
       }),
       budget, "composition agent"
     );
@@ -379,12 +420,29 @@ async function compositionAgent(s) {
       console.warn(`[agents] repair re-compose failed — keeping prior lint-passing render (not falling back to template)`);
       return { visual: s.visual, usedFallback: false, finalAttempt: s.finalAttempt || "main", rendered: true };
     }
-    console.warn(`[agents] deterministic fallback`);
     try {
       if (fs.existsSync(path.join(jobDir, "index.html"))) {
         fs.copyFileSync(path.join(jobDir, "index.html"), path.join(jobDir, "index.llm-attempt.html"));
       }
     } catch { /* best effort */ }
+    // The LLM composer failed its gates. Before the bland template, try the
+    // deterministic ASSET-RICH scene-kit — a real, lint-clean, multi-asset comp
+    // (screenshot hero + montage + scrim B-roll) beats a fallback slide. Only
+    // worth a separate attempt when the composer (remix) was the primary path.
+    if (useComposer) {
+      try {
+        console.warn(`[agents] scene-kit fallback (deterministic, asset-rich)`);
+        const visual = await attemptLlmComposition({
+          storyboard, dims, jobDir, assets: s.assets || [], tracker,
+          jobId: job.id, durationSec: job.duration, label: "scene-kit-fallback",
+          framePack: s.framePack, captionCues, remix: false,
+        });
+        return { visual, usedFallback: false, finalAttempt: "scene-kit", rendered: true };
+      } catch (e2) {
+        console.warn(`[agents] scene-kit fallback failed (${String(e2.message).slice(0, 120)}) — bland template`);
+      }
+    }
+    console.warn(`[agents] deterministic fallback`);
     const fb = buildFallback({
       prompt: s.brief?.improvedPrompt || job.prompt, duration: job.duration,
       orientation: job.orientation, width: dims.width, height: dims.height, fps: dims.fps,
@@ -535,9 +593,18 @@ async function buildGraph() {
   g.addEdge("timeline", "qa_agent");
   g.addConditionalEdges("qa_agent", (s) => {
     const repairsLeft = (s.qaAttempts || 0) <= (Number(config.qa?.maxRepairs) || 1);
-    if (!s.qa?.pass && repairsLeft && !s.usedFallback) {
+    // Only repair when the LLM COMPOSER is the active path: it's non-deterministic
+    // and can actually respond to QA feedback. With the deterministic scene-kit
+    // (config.llm.useComposer=false, the default), a repair lap re-renders byte-
+    // identical output — so QA failing (e.g. the weak Flash vision model calling a
+    // deliberately-sparse cinematic frame "under-illustrated") would just churn the
+    // same render N times and burn vision calls. QA still runs ONCE as a diagnostic.
+    if (!s.qa?.pass && repairsLeft && !s.usedFallback && config.llm.useComposer) {
       console.log(`[agents] QA failed — repair lap ${s.qaAttempts}`);
       return "repair";
+    }
+    if (!s.qa?.pass && !config.llm.useComposer) {
+      console.log(`[agents] QA flagged the deterministic scene-kit render (diagnostic only — no repair lap; the kit is deterministic)`);
     }
     return END;
   }, ["repair", END]);

@@ -13,6 +13,7 @@ const config = require("../../config");
 const localDb = require("./local_db");
 const curated = require("./curated_library");
 const util = require("./util");
+const { imageFitsTopic } = require("./vision_filter");
 
 const PROVIDERS = {
   pixabay: require("./pixabay_api"),
@@ -43,8 +44,41 @@ function hasProviderFor(type) {
 // `kindPref` ("photo" | "illustration" | "vector") biases the curated library
 // toward the right asset shape for the need's role. `excludeIds` (Set) skips
 // curated entries already used in this video so a film never reuses a file.
-async function acquire({ query, fallbackQueries = [], type, orientation, outputPath, tracker, kindPref, excludeIds }) {
+// Generic words that carry no SUBJECT signal — excluded from relevance scoring so
+// "modern business background" doesn't match every stock photo's boilerplate tags.
+const REL_STOP = new Set([
+  "the", "and", "for", "with", "from", "background", "backgrounds", "scene", "image",
+  "photo", "modern", "abstract", "concept", "business", "technology", "digital", "design",
+  "style", "view", "shot", "closeup", "close", "high", "quality", "professional", "premium",
+  "beautiful", "creative", "color", "colorful", "light", "dark", "white", "black", "vector",
+  "illustration", "icon", "texture", "pattern", "people", "person", "man", "woman",
+]);
+function relTokens(s) {
+  return [...new Set((String(s || "").toLowerCase().match(/[a-z]{3,}/g) || []).filter((w) => !REL_STOP.has(w)))];
+}
+// Overlap score between a query's subject words and a candidate's provider tags.
+// Exact + 4-char-prefix match (so "writing"≈"writer", "deploy"≈"deployment").
+function relevanceScore(qToks, tagStr) {
+  const tags = relTokens(tagStr);
+  if (!tags.length) return 0;
+  let score = 0;
+  for (const q of qToks) {
+    for (const t of tags) {
+      if (t === q || (q.length >= 4 && (t.startsWith(q.slice(0, 4)) || q.startsWith(t.slice(0, 4))))) { score++; break; }
+    }
+  }
+  return score;
+}
+
+async function acquire({ query, fallbackQueries = [], type, orientation, outputPath, tracker, kindPref, excludeIds, visionTopic }) {
   const queries = [query, ...fallbackQueries].filter(Boolean);
+  // Vision relevance is the SLOW gate (~one model call per image). Budget it hard:
+  // only the PRIMARY query, at most VISION_MAX images. If both top candidates are
+  // off-topic the need resolves to null → the scene-kit fills it with a motif.
+  const useVision = type === "image" && visionTopic && config.assets?.visionRelevance !== false;
+  const VISION_MAX = 2;
+  let visionUsed = 0;
+  const shouldVision = (q) => useVision && q === query && visionUsed < VISION_MAX;
 
   // 0 — the curated local library (user's pre-loaded packs), stills only.
   // Highest priority: hand-picked, license-clean, offline. The file keeps its
@@ -69,11 +103,17 @@ async function acquire({ query, fallbackQueries = [], type, orientation, outputP
     }
   }
 
-  // 1 — our fetch cache.
+  // 1 — our fetch cache (vision-gated too, so a grandfathered off-topic cache entry
+  // can't sneak past the relevance check that fresh fetches get).
   for (const q of queries) {
     const hits = localDb.search({ query: q, type, orientation });
-    if (hits.length) {
-      const meta = localDb.materialize(hits[0], outputPath);
+    for (const hit of hits) {
+      if (shouldVision(q)) {
+        visionUsed++;
+        const fits = await imageFitsTopic({ imagePath: hit.file, topic: visionTopic, query: q, tracker });
+        if (!fits) { console.log(`[assets] vision-rejected cached image for "${q}" (off-topic for the subject)`); continue; }
+      }
+      const meta = localDb.materialize(hit, outputPath);
       if (tracker) tracker.addExternal("asset_cache_hit");
       return { path: outputPath, query: q, fromCache: true, ...meta };
     }
@@ -85,13 +125,41 @@ async function acquire({ query, fallbackQueries = [], type, orientation, outputP
       let candidates = [];
       try {
         if (tracker) tracker.addExternal(`${provider.name}_search`);
-        candidates = await provider.search({ query: q, type, orientation, limit: 5 });
+        candidates = await provider.search({ query: q, type, orientation, limit: 8 });
       } catch (e) {
         console.warn(`[assets] ${provider.name} search failed for "${q}": ${e.message}`);
         continue;
       }
 
-      for (const c of candidates.slice(0, 3)) {
+      // RELEVANCE GATE — providers fuzzy-match and happily return off-topic popular
+      // stock (the "blog posts → suitcase" problem). When candidates carry subject
+      // tags, keep only those that actually overlap the query and rank by overlap;
+      // if NONE match, skip this query (→ eventually no asset, and the scene-kit fills
+      // the scene with a visualMotif vector instead of shipping an irrelevant photo).
+      const qToks = relTokens(q);
+      const haveTags = qToks.length > 0 && candidates.some((c) => c.tags);
+      let usable = candidates;
+      if (haveTags) {
+        usable = candidates
+          .map((c) => ({ c, s: relevanceScore(qToks, c.tags) }))
+          .filter((x) => x.s > 0)
+          .sort((a, b) => b.s - a.s)
+          .map((x) => x.c);
+        if (!usable.length) {
+          console.log(`[assets] ${provider.name}: all ${candidates.length} result(s) off-topic for "${q}" — skipping (no relevant match)`);
+          continue;
+        }
+      }
+
+      for (const c of usable.slice(0, 3)) {
+        // VISION RELEVANCE — the model looks at the actual image (by URL, no download)
+        // and rejects semantic misses the tag gate can't catch. Runs only on external
+        // stock (curated/cache already passed their own relevance). Fail-open.
+        if (shouldVision(q)) {
+          visionUsed++;
+          const fits = await imageFitsTopic({ imageUrl: c.url, topic: visionTopic, query: q, tracker });
+          if (!fits) { console.log(`[assets] vision-rejected ${provider.name} image for "${q}" (off-topic for the subject)`); continue; }
+        }
         try {
           await util.download(c.url, outputPath);
           const ok = await util.validateMedia(outputPath, type);
@@ -103,7 +171,7 @@ async function acquire({ query, fallbackQueries = [], type, orientation, outputP
           localDb.register({
             filePath: outputPath, query: q, type, orientation,
             source: provider.name, license: c.license, sourceUrl: c.sourceUrl,
-            width: c.width, height: c.height,
+            width: c.width, height: c.height, tags: c.tags,
           });
           console.log(`[assets] "${q}" (${type}) <- ${provider.name}`);
           return {

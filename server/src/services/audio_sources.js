@@ -198,7 +198,25 @@ async function fetchMusic({ query, outputPath, tracker }) {
     }
   }
 
-  log(`music: no source available for "${query}"; skipping`);
+  // 3) GENERIC fallback queries — a niche mood query ("warm minimal pensive") often
+  // matches nothing on Freesound/IA, which left roughly half of videos SILENT (TTS-
+  // only). Try a few broad, reliably-stocked queries so a film almost always gets a
+  // music bed. Only reached when the authored query already failed, so it can never
+  // make things worse.
+  const FALLBACKS = ["uplifting corporate background", "cinematic ambient electronic", "inspiring background music", "calm piano background"];
+  for (const fq of FALLBACKS) {
+    if (fq === query) continue;
+    if (tracker) tracker.addExternal("freesound_search");
+    const r = await freesoundSearch({ query: fq, filter: "duration:[20 TO 180] tag:music", sort: "rating_desc" });
+    const hit = await downloadFirstFreesoundPreview(r, outputPath);
+    if (hit) {
+      if (tracker) tracker.addExternal("freesound_download");
+      log(`music: authored query "${query}" had no source — used generic fallback "${fq}"`);
+      return hit;
+    }
+  }
+
+  log(`music: no source available for "${query}" (or generic fallbacks); skipping`);
   return null;
 }
 

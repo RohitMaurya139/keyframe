@@ -87,6 +87,23 @@ function dominantColors(screenshotPath) {
   });
 }
 
+// Download a real page image (validated as a non-trivial raster) into workDir.
+async function downloadImage(url, dest) {
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) return false;
+    const ct = res.headers.get("content-type") || "";
+    if (!/^image\/(jpeg|jpg|png|webp|gif)/i.test(ct)) return false;
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length < 3072) return false; // <3KB → an icon/spacer, not a usable asset
+    fs.writeFileSync(dest, buf);
+    return true;
+  } catch { return false; }
+}
+
 async function understandWebsite({ url, workDir, timeoutMs = 60_000 }) {
   const chrome = findChrome();
   if (!chrome) throw new Error("no Chrome found for website ingest (set PUPPETEER_EXECUTABLE_PATH or config.ingest.chromePath)");
@@ -120,12 +137,31 @@ async function understandWebsite({ url, workDir, timeoutMs = 60_000 }) {
       const bodyText = (document.body?.innerText || "")
         .replace(/\n{3,}/g, "\n\n")
         .slice(0, 4000);
+      // REAL content images on the page (product shots, illustrations, logos) — far
+      // more on-brand than generic stock. Keep substantial, visible, raster images;
+      // skip tiny icons, tracking pixels, data-URIs, and SVG sprites.
+      const seen = new Set();
+      const images = [];
+      for (const img of document.querySelectorAll("img")) {
+        let src = img.currentSrc || img.src || "";
+        if (!/^https?:\/\//i.test(src) || /\.svg(\?|$)/i.test(src)) continue;
+        const w = img.naturalWidth || img.clientWidth, h = img.naturalHeight || img.clientHeight;
+        const rect = img.getBoundingClientRect();
+        if (w < 200 || h < 140) continue;                 // skip icons/avatars/pixels
+        const ar = w / h; if (ar > 4 || ar < 0.3) continue; // skip banners/thin strips
+        if (rect.width < 80 || rect.height < 60) continue;  // must be actually rendered
+        const key = src.split("?")[0];
+        if (seen.has(key)) continue; seen.add(key);
+        images.push({ src, area: w * h });
+      }
+      images.sort((a, b) => b.area - a.area);
       return {
         title: document.title || null,
         description: meta("description") || meta("og:description"),
         ogImage: meta("og:image"),
         headings,
         bodyText,
+        imageUrls: images.slice(0, 10).map((x) => x.src),
       };
     });
 
@@ -152,10 +188,59 @@ async function understandWebsite({ url, workDir, timeoutMs = 60_000 }) {
       console.warn(`[ingest] section screenshots failed: ${e.message}`);
     }
 
+    // Full scroll to trigger lazy-loaded media, then collect real images INCLUDING
+    // CSS background-images of large blocks (heroes/feature cards commonly use them,
+    // and lazy <img>s have naturalWidth 0 until scrolled — which is why an early
+    // img-only pass found nothing on modern sites).
+    try {
+      await page.evaluate(async () => {
+        await new Promise((res) => {
+          let y = 0; const step = 700;
+          const t = setInterval(() => { window.scrollBy(0, step); y += step; if (y > (document.body?.scrollHeight || 0)) { clearInterval(t); res(); } }, 70);
+        });
+        window.scrollTo(0, 0);
+      });
+      await new Promise((r) => setTimeout(r, 800));
+      const more = await page.evaluate(() => {
+        const out = [], seen = new Set();
+        const push = (u) => { if (/^https?:\/\//i.test(u) && !/\.svg(\?|$)/i.test(u)) { const k = u.split("?")[0]; if (!seen.has(k)) { seen.add(k); out.push(u); } } };
+        [...document.querySelectorAll("img")]
+          .map((img) => ({ src: img.currentSrc || img.src || "", w: img.naturalWidth || img.clientWidth, h: img.naturalHeight || img.clientHeight }))
+          .filter((x) => x.w >= 180 && x.h >= 120 && x.w / x.h <= 4 && x.w / x.h >= 0.3)
+          .sort((a, b) => b.w * b.h - a.w * a.h)
+          .forEach((x) => push(x.src));
+        for (const el of document.querySelectorAll("section,div,header,figure,a")) {
+          const r = el.getBoundingClientRect();
+          if (r.width < 320 || r.height < 220) continue;
+          const m = (getComputedStyle(el).backgroundImage || "").match(/url\(["']?(https?:[^"')]+)["']?\)/i);
+          if (m) push(m[1]);
+        }
+        return out.slice(0, 14);
+      });
+      data.imageUrls = [...new Set([...(data.imageUrls || []), ...more])];
+    } catch (e) { console.warn(`[ingest] image collection failed: ${e.message}`); }
+
     const brandColors = await dominantColors(screenshotPath).catch(() => []);
 
-    console.log(`[ingest] website understood: "${data.title}" — ${data.headings.length} headings, ${data.bodyText.length}ch body, ${screenshotPaths.length} screenshot(s), colors=${brandColors.join(",")}`);
-    return { url, ...data, brandColors, screenshotPath, screenshotPaths };
+    // Download the page's REAL content images (product shots, illustrations) as
+    // first-class assets — far more on-brand than generic stock. Best-effort: a
+    // hotlink-protected or oversized image just fails and is skipped.
+    const contentImages = [];
+    let imgI = 0;
+    for (const u of (data.imageUrls || [])) {
+      if (contentImages.length >= 6) break;
+      const ext = /\.png(\?|$)/i.test(u) ? "png" : /\.webp(\?|$)/i.test(u) ? "webp" : "jpg";
+      const p = path.join(workDir, `site_img${imgI++}.${ext}`);
+      if (await downloadImage(u, p)) contentImages.push(p);
+    }
+    if (data.ogImage && /^https?:/i.test(data.ogImage) && contentImages.length < 7) {
+      const p = path.join(workDir, "site_og.jpg");
+      if (await downloadImage(data.ogImage, p)) contentImages.push(p);
+    }
+    delete data.imageUrls; // raw URLs not needed downstream
+
+    console.log(`[ingest] website understood: "${data.title}" — ${data.headings.length} headings, ${data.bodyText.length}ch body, ${screenshotPaths.length} screenshot(s), ${contentImages.length} real image(s), colors=${brandColors.join(",")}`);
+    return { url, ...data, brandColors, screenshotPath, screenshotPaths, contentImages };
   } finally {
     await browser.close().catch(() => {});
   }

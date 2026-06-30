@@ -29,6 +29,7 @@ async function search({ query, type, orientation, limit = 5 }) {
       width: p.width, height: p.height,
       license: "Pexels License",
       sourceUrl: p.url,
+      tags: p.alt || "", // Pexels' alt text → subject signal for relevance scoring
     })).filter((c) => c.url);
   }
 

@@ -17,12 +17,12 @@
   },
   "llm": {
     "provider": "openrouter",
-    "model":         "google/gemini-2.5-flash-lite",
-    "modelFast":     "google/gemini-2.5-flash-lite",
-    "modelFallback": "google/gemini-2.5-flash",
+    "model":         "google/gemini-3.5-flash",
+    "modelFast":     "google/gemini-3.5-flash",
+    "modelFallback": "google/gemini-3.5-flash",
     "stageModels": {
       "storyboard":   "default",
-      "composer":     "anthropic/claude-opus-4.8",
+      "composer":     "google/gemini-3.5-flash",
       "assetPlanner": "default",
       "audioPlanner": "default"
     },
@@ -33,6 +33,7 @@
       "composer": 40960,
       "storyboard": 16384
     },
+    "useComposer": false,
     "storyboardMaxRetries": 1,
     "composerMaxRetries": 1,
     "composerLintRepairs": 2,
