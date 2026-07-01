@@ -125,6 +125,9 @@ module.exports = {
       // Subtitles are OPT-IN: off unless the request explicitly asks for them.
       captions_enabled: (job.captions === true || job.captionsEnabled === true) ? 1 : 0,
       upload_path: job.uploadPath || null,
+      // The user's own uploaded brand assets ({path,type,kind,originalName}[]). Pinned
+      // as highest-priority REAL material in the graph (source:"user-upload").
+      user_assets: Array.isArray(job.userAssets) && job.userAssets.length ? job.userAssets : null,
       intent: job.intent || null,
       autopilot: job.autopilot ? 1 : 0,
       brief: null,

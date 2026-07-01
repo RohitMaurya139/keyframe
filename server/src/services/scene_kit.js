@@ -475,16 +475,20 @@ function partitionAssets(assets) {
     // is a broken frame. Drop it (a clean image-based render beats a broken tile;
     // proper <video> b-roll is a future enhancement). Detect by type or extension.
     if (a.type === "video" || /\.(mp4|webm|mov|m4v)(\?|$)/i.test(a.path)) continue;
-    // DE-DUPLICATE by source URL: the same stock image is often fetched for several
-    // scene needs and saved as 3.jpg / 4.jpg / 8.jpg (distinct paths, identical
-    // picture), which made montages show the same photo 3×. Key on sourceUrl, fall
-    // back to path. This is the fix for the "duplicate tile" defect.
-    const key = String(a.sourceUrl || a.path).trim().toLowerCase();
+    // DE-DUPLICATE. Stock can be fetched for several needs and saved as 3.jpg/4.jpg
+    // (distinct paths, IDENTICAL picture) — dedup THAT by sourceUrl. But real FILE
+    // assets (site screenshots, scraped page images, user uploads) are each a DISTINCT
+    // file even though they share one page sourceUrl — keying them by sourceUrl wrongly
+    // collapsed all 6 scraped images + 3 screenshots to one. Dedup file assets by PATH.
+    const isFileAsset = /website|user-upload/.test(a.source || "");
+    const key = String(isFileAsset ? a.path : (a.sourceUrl || a.path)).trim().toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
     const s = `${a.source || ""} ${a.style || ""} ${a.alt || ""}`.toLowerCase();
     if (a.source === "website" || /screenshot|webpage|web page|landing|\bsite\b/.test(s)) screenshots.push(a);
-    else if (/\.svg($|\?)/i.test(a.path) || /vector|illustration|icon|line.?art|graphic/.test(s)) vectors.push(a);
+    // Logos/graphics → the VECTOR pool: contained, padded side-art placement (a logo
+    // stretched full-bleed as a scrim looks broken; transparent PNGs need breathing room).
+    else if (/\.svg($|\?)/i.test(a.path) || /vector|illustration|icon|line.?art|graphic|\blogo\b/.test(s)) vectors.push(a);
     else photos.push(a);
   }
   return { screenshots, vectors, photos };
@@ -627,11 +631,24 @@ function scrimBg(asset, ctx) {
   const { theme, id, T, L } = ctx;
   if (!asset) return null;
   const g = theme.ground;
-  const scrim = `linear-gradient(180deg, ${rgba(g, 0.55)} 0%, ${rgba(g, 0.74)} 55%, ${rgba(g, 0.9)} 100%)`;
+  // A SCREENSHOT carries its OWN headline/UI text. A light photo scrim lets that text
+  // bleed through and fight the scene's overlay (the "75+" reading over the page's own
+  // "Supercharge Your Creativity" hero). Treat a screenshot as DEFOCUSED context: blur
+  // it to a soft texture and lay a heavier, centre-weighted scrim so the overlay owns
+  // the frame — and SKIP the colour grade (tinting a real product UI distorts it). Stock
+  // photos carry no text, so they keep the light grade + light scrim. blur(10px) is
+  // safely inside the kenBurns overscan (from ≥1.06 ⇒ ≥21px per side), so no edge gap.
+  const meta = `${asset.source || ""} ${asset.style || ""} ${asset.alt || ""}`.toLowerCase();
+  const isShot = asset.source === "website" || /screenshot|webpage|web page|landing|\bsite\b/.test(meta);
+  const scrim = isShot
+    ? `radial-gradient(125% 90% at 50% 46%, ${rgba(g, 0.58)}, ${rgba(g, 0.84)} 72%), linear-gradient(180deg, ${rgba(g, 0.66)} 0%, ${rgba(g, 0.8)} 55%, ${rgba(g, 0.93)} 100%)`
+    : `linear-gradient(180deg, ${rgba(g, 0.55)} 0%, ${rgba(g, 0.74)} 55%, ${rgba(g, 0.9)} 100%)`;
+  const imgFilter = isShot ? "filter:blur(10px);" : "";
+  const grade = isShot ? "" : photoGrade(theme);
   const seed = (parseInt(String(id).replace(/\D/g, ""), 10) || 0);
   const kb = kenBurns(seed);
   // photo (bottom) → palette grade (tints stock to the pack) → scrim (text contrast)
-  const html = `<div id="${id}bg" class="clip" data-start="${T}" data-duration="${ctx.clipDur}" data-track-index="${ctx.bgTrack}" data-layout-allow-occlusion style="opacity:0;overflow:hidden;"><img id="${id}bgi" src="${esc(asset.path)}" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;">${photoGrade(theme)}<div style="position:absolute;inset:0;background:${scrim};"></div></div>`;
+  const html = `<div id="${id}bg" class="clip" data-start="${T}" data-duration="${ctx.clipDur}" data-track-index="${ctx.bgTrack}" data-layout-allow-occlusion style="opacity:0;overflow:hidden;"><img id="${id}bgi" src="${esc(asset.path)}" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;${imgFilter}">${grade}<div style="position:absolute;inset:0;background:${scrim};"></div></div>`;
   const s = [
     `tl.fromTo("#${id}bg",{opacity:0},{opacity:1,duration:0.6},${r(T)});`,
     `tl.fromTo("#${id}bgi",{scale:${kb.from},xPercent:0,yPercent:0},{scale:${kb.to},xPercent:${kb.dx},yPercent:${kb.dy},duration:${r(ctx.clipDur)},ease:"none",transformOrigin:"${kb.origin}"},${r(T)});`,
@@ -786,11 +803,21 @@ function buildComposition({ storyboard, dims, framePack, assets, captionCues } =
   const leftover = () => pools.screenshots.length + pools.vectors.length + pools.photos.length;
   let usedShot = false, montageDone = false;
 
-  // Pass 1 — foreground features on plain-text content scenes (never override a
-  // hook / stat / cta — those carry their own beat). Rotate a fresh screenshot
-  // hero, reserve one scene for a montage when the pool is deep, then split-art.
+  // Are there REAL/user assets (uploaded brand assets or scraped site material) waiting
+  // to be placed? They are user-intended and MUST get a slot — otherwise an uploaded
+  // logo/screenshot silently vanishes. When present, we let them override STAT scenes
+  // too (not just plain-text ones), so a tech intro full of stat + typewriter scenes
+  // still shows the user's assets. We never touch the typewriter (archTerminal) scene
+  // or the hook/cta. Pure-stock pools keep the conservative text-only behaviour.
+  const hasRealForeground = [...pools.screenshots, ...pools.vectors, ...pools.photos]
+    .some((a) => /website|user-upload/.test((a && a.source) || ""));
+  const canHost = (p) => p.isContent && p.build !== archTerminal
+    && (p.build === archText || hasRealForeground);
+
+  // Pass 1 — foreground features on content scenes. Rotate a fresh screenshot hero,
+  // reserve one scene for a montage when the pool is deep, then split-art.
   for (const p of plan) {
-    if (p.build !== archText || !p.isContent) continue;
+    if (!canHost(p)) continue;
     if (!usedShot && pools.screenshots.length) {
       p.ctx.asset = pools.screenshots.shift(); p.build = archScreenshotHero; usedShot = true;
       p.ctx.kicker = p.scene.emphasis || "Live preview";
@@ -815,7 +842,7 @@ function buildComposition({ storyboard, dims, framePack, assets, captionCues } =
     // stock photo full-screen is the worst "off-topic b-roll" offender (the windmill
     // / old-woman / suitcase). Stock stays for small montage tiles or goes unused —
     // the visualMotif vector + pack background fill a scene with no real photo.
-    const isReal = (a) => /website/.test((a && a.source) || "");
+    const isReal = (a) => /website|user-upload/.test((a && a.source) || "");
     for (const p of plan) {
       if (p.i === 0 || p.ctx.asset || p.ctx.assets) continue;
       const ri = pools.photos.findIndex(isReal);

@@ -202,6 +202,22 @@ function build() {
     ? /^(1|true|yes|on)$/i.test(String(process.env.USE_LLM_COMPOSER))
     : (cfg.llm.useComposer === true);
 
+  // Asset relevance. Two independent knobs, both ON by default:
+  //   visionRelevance — the model LOOKS at each candidate image and rejects
+  //                     semantic misses the tag gate can't catch.
+  //   relevanceStrict — STRICT routes abstract/metaphorical scenes ("dominate
+  //                     rankings", "bloom") straight to a motif instead of fetching
+  //                     doomed stock, and tells the vision gate to reject anything
+  //                     not CLEARLY on-subject ("when in doubt, reject"). Relaxing it
+  //                     restores the lenient "keep reasonable on-theme images" gate.
+  // Override via config.json {"assets":{...}} or env ASSET_RELEVANCE_STRICT / ASSET_VISION_RELEVANCE.
+  cfg.assets = cfg.assets || {};
+  const boolEnv = (v) => /^(1|true|yes|on)$/i.test(String(v));
+  if (process.env.ASSET_RELEVANCE_STRICT != null) cfg.assets.relevanceStrict = boolEnv(process.env.ASSET_RELEVANCE_STRICT);
+  else if (cfg.assets.relevanceStrict == null) cfg.assets.relevanceStrict = true;
+  if (process.env.ASSET_VISION_RELEVANCE != null) cfg.assets.visionRelevance = boolEnv(process.env.ASSET_VISION_RELEVANCE);
+  else if (cfg.assets.visionRelevance == null) cfg.assets.visionRelevance = true;
+
   validate(cfg);
 
   // Resolve paths relative to project root.

@@ -21,26 +21,65 @@ const { validateScript, normalizeScript } = require("../services/script");
 
 const nanoid = customAlphabet("0123456789abcdefghijklmnopqrstuvwxyz", 10);
 
-// Reference-video uploads (multipart). JSON bodies bypass multer entirely.
+// Multipart uploads (JSON bodies bypass multer entirely):
+//   referenceVideo — one video to transcribe for the script (existing behaviour)
+//   assets[]       — the user's OWN brand assets (logos, product/company photos,
+//                    graphics, b-roll). Pinned as the highest-priority REAL material
+//                    so the render uses them instead of stock. Images render today;
+//                    uploaded videos are stored but <video> weaving is a later phase.
 const VIDEO_MIMES = new Set(["video/mp4", "video/quicktime", "video/webm"]);
+const IMAGE_MIMES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "image/svg+xml", "image/avif"]);
+const MAX_ASSETS = 20;
 const upload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, config.paths.uploadsDir),
     filename: (_req, file, cb) => {
-      const ext = (path.extname(file.originalname) || ".mp4").toLowerCase().slice(0, 8);
+      const ext = (path.extname(file.originalname) || (file.fieldname === "assets" ? ".bin" : ".mp4")).toLowerCase().slice(0, 8);
       cb(null, `${nanoid()}${ext}`);
     },
   }),
-  limits: { fileSize: (config.ingest?.maxUploadMb || 200) * 1024 * 1024, files: 1 },
+  limits: { fileSize: (config.ingest?.maxUploadMb || 200) * 1024 * 1024, files: MAX_ASSETS + 1 },
   fileFilter: (_req, file, cb) => {
-    if (VIDEO_MIMES.has(file.mimetype)) cb(null, true);
-    else cb(new Error(`unsupported video type ${file.mimetype} (mp4/mov/webm only)`));
+    if (file.fieldname === "referenceVideo") {
+      return VIDEO_MIMES.has(file.mimetype) ? cb(null, true) : cb(new Error(`unsupported video type ${file.mimetype} (mp4/mov/webm only)`));
+    }
+    if (file.fieldname === "assets") {
+      return (IMAGE_MIMES.has(file.mimetype) || VIDEO_MIMES.has(file.mimetype))
+        ? cb(null, true)
+        : cb(new Error(`unsupported asset type ${file.mimetype} (images or mp4/mov/webm)`));
+    }
+    cb(null, false); // ignore unknown fields
   },
 });
 
+const ASSET_KINDS = new Set(["logo", "product", "photo", "graphic", "background", "character", "screenshot", "broll"]);
+function normalizeKind(k, isVideo) {
+  const v = String(k || "").toLowerCase().trim();
+  if (ASSET_KINDS.has(v)) return v;
+  return isVideo ? "broll" : "photo";
+}
+
+// Build the user-asset manifest from multer's parsed files + the parallel
+// `assetKinds` text fields (one per asset, same order). Kinds are advisory — they
+// steer placement (logo→contained, product→hero, photo→background); unknown ⇒ default.
+function collectUserAssets(req) {
+  const files = (req.files && req.files.assets) || [];
+  if (!files.length) return [];
+  const kinds = [].concat((req.body && req.body.assetKinds) || []);
+  return files.map((f, i) => {
+    const isVideo = VIDEO_MIMES.has(f.mimetype);
+    return {
+      path: f.path,
+      type: isVideo ? "video" : "image",
+      kind: normalizeKind(kinds[i], isVideo),
+      originalName: String(f.originalname || "").slice(0, 120),
+    };
+  });
+}
+
 function maybeMultipart(req, res, next) {
   if (req.is("multipart/form-data")) {
-    upload.single("referenceVideo")(req, res, (err) => {
+    upload.fields([{ name: "referenceVideo", maxCount: 1 }, { name: "assets", maxCount: MAX_ASSETS }])(req, res, (err) => {
       if (err) return res.status(400).json({ error: "upload failed", details: [err.message] });
       next();
     });
@@ -131,7 +170,8 @@ function buildRouter({ enqueueIntake, enqueueProduction }) {
   });
 
   router.post("/projects", limiter, maybeMultipart, (req, res) => {
-    const uploadPath = req.file ? req.file.path : null;
+    const uploadPath = req.files?.referenceVideo?.[0]?.path || null;
+    const userAssets = collectUserAssets(req);
     const { errs, out } = validateCreate(req.body || {}, { hasUpload: !!uploadPath });
     if (errs.length) return res.status(400).json({ error: "invalid request", details: errs });
 
@@ -158,6 +198,8 @@ function buildRouter({ enqueueIntake, enqueueProduction }) {
       autopilot: out.autopilot,
       captionsEnabled: out.captions,
       uploadPath,
+      userAssets, // the user's own brand assets, pinned into the render
+
       intent: {
         prompt: out.prompt,
         websiteUrl: out.websiteUrl || null,

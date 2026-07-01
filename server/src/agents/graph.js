@@ -133,6 +133,9 @@ async function scenePlannerAgent(s) {
 async function assetPlannerAgent(s) {
   const { job, script } = s;
   const videoOk = hasProviderFor("video");
+  // STRICT relevance (default): abstract/metaphorical scenes derive NO photo query
+  // and fall back to a motif, instead of fetching unmatchable stock. See deriveQuery.
+  const strictAssets = config.assets?.relevanceStrict !== false;
   const ex = (p) => { try { return fs.existsSync(p); } catch { return false; } };
   const shots = (job.website_screenshots || []).filter(ex);
   const realImgs = (job.website_images || []).filter(ex);
@@ -154,9 +157,49 @@ async function assetPlannerAgent(s) {
   // Derive a concrete image query from a scene's visualDirection when the
   // script asked for nothing — substance scenes should never go imageless.
   const STOP = new Set(["the", "a", "an", "with", "and", "of", "in", "on", "over", "into", "across", "as", "to", "that", "then", "while", "for", "is", "are", "we", "see", "scene", "text", "headline", "screen"]);
+  // Camera/motion vocabulary — visualDirection usually LEADS with the camera move
+  // ("Camera pushes aggressively toward the logo"), and the naive first-4-words pick
+  // turned that motion language into image queries like "camera pushes aggressively".
+  // Strip it so deriveQuery keeps only SUBJECT words; if nothing subject-y remains the
+  // scene degrades to a motif (the intended fallback) instead of fetching garbage stock.
+  const CAMERA_STOP = new Set([
+    "camera", "lens", "shot", "frame", "framing", "angle", "view", "viewpoint",
+    "push", "pushes", "pushing", "pull", "pulls", "pulling", "zoom", "zooms", "zooming",
+    "pan", "pans", "panning", "tilt", "tilts", "dolly", "truck", "track", "tracks", "tracking",
+    "crane", "drift", "drifts", "drifting", "glide", "glides", "gliding", "sweep", "sweeps",
+    "rack", "orbit", "orbits", "orbiting", "parallax", "motion", "move", "moves", "moving",
+    "movement", "forward", "backward", "toward", "towards", "away", "upward", "downward",
+    "slow", "slowly", "fast", "quick", "quickly", "rapid", "rapidly", "aggressive",
+    "aggressively", "smooth", "smoothly", "gentle", "gently", "gradual", "gradually",
+    "subtle", "subtly", "dynamic", "dynamically", "reveal", "reveals", "revealing",
+    "transition", "transitions", "cut", "cuts", "fade", "fades", "dissolve", "dissolves",
+    "focus", "blur", "blurs", "sharpen", "begins", "starts", "ends", "holds", "snaps", "settles",
+  ]);
+  // Abstract MARKETING vocabulary — concepts, not photographable subjects. A query
+  // built from these ("dominate rankings", "seamless growth", "unlock potential")
+  // can't map to a real photo, so free stock returns whatever is popular (the
+  // desert-woman, the race car). In STRICT mode we strip these too and, if too few
+  // CONCRETE words survive, derive NO photo query → the scene gets a motif/typography
+  // instead of doomed stock. (Lenient mode keeps the old behaviour.)
+  const ABSTRACT_STOP = new Set([
+    "dominate", "domination", "rankings", "ranking", "growth", "grow", "success", "successful",
+    "power", "powerful", "seamless", "seamlessly", "instant", "instantly", "transform", "transforms",
+    "transformation", "revolution", "revolutionary", "boost", "unlock", "unleash", "elevate", "amplify",
+    "optimize", "optimized", "optimization", "scale", "scalable", "efficiency", "efficient",
+    "productivity", "productive", "innovation", "innovative", "solution", "solutions", "experience",
+    "journey", "future", "smart", "intelligent", "advanced", "premium", "ultimate", "exclusive",
+    "confidence", "confident", "freedom", "potential", "results", "impact", "value", "quality",
+    "excellence", "performance", "momentum", "vision", "mission", "strategy", "strategic", "robust",
+    "agile", "streamline", "streamlined", "empower", "empowered", "breakthrough", "gamechanger",
+    "win", "winning", "thrive", "thriving", "leverage", "synergy", "disrupt", "disruptive", "edge",
+    "leading", "leader", "trusted", "proven", "simple", "simplify", "simplified", "effortless",
+    "magic", "magical", "supercharge", "accelerate", "maximize", "deliver", "drive", "driving",
+    "everything", "anything", "anyone", "everyone", "world", "global", "globally", "today", "now",
+  ]);
   const deriveQuery = (scene) => {
     const words = String(scene.visualDirection || "").toLowerCase().match(/[a-z]{3,}/g) || [];
-    const picked = words.filter((w) => !STOP.has(w)).slice(0, 4);
+    const concrete = words.filter((w) => !STOP.has(w) && !CAMERA_STOP.has(w) && (!strictAssets || !ABSTRACT_STOP.has(w)));
+    const picked = concrete.slice(0, 4);
     return picked.length >= 2 ? picked.join(" ") : null;
   };
 
@@ -196,9 +239,11 @@ async function assetPlannerAgent(s) {
   // "icon" (the script schema allows type:"icon" with any role; keying only off
   // role missed those and fetched explicitly-requested icons as photos).
   const isVectorNeed = (n) => VECTOR_ROLES.has(roleOf(n)) || n.type === "icon";
-  // How much REAL brand material we have (site screenshots + scraped page images).
-  // When it's plentiful, we cap (or zero) the lower-quality stock sources below.
-  const realCount = shots.length + imagePlan.length;
+  // How much REAL brand material we have (site screenshots + scraped page images +
+  // the USER'S OWN uploaded assets). When it's plentiful, we cap (or zero) the
+  // lower-quality stock sources below — a user's real logo/product beats any stock.
+  const userImgCount = (job.user_assets || []).filter((a) => a && a.type === "image").length;
+  const realCount = shots.length + imagePlan.length + userImgCount;
   const videos = wants.filter((w) => w.need.type === "video").slice(0, 2);
   // Vectors get their OWN budget so a long photo list can't starve them — this
   // is what finally feeds the curated SVG library into films.
@@ -235,6 +280,47 @@ function topicAnchor(job, brief) {
     if (!ANCHOR_STOP.has(w)) freq[w] = (freq[w] || 0) + 1;
   }
   return Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 2).map((x) => x[0]).join(" ");
+}
+
+// Pin the user's OWN uploaded assets (logos, product/company photos, graphics) as
+// the HIGHEST-priority real material — copied into the job dir and tagged
+// source:"user-upload" so the scene-kit weaves them like real brand assets, ahead of
+// any stock. `kind` steers placement: logo/graphic → contained side-art, product →
+// inset hero, photo/background/character → full-bleed-eligible photo. Uploaded VIDEOS
+// are accepted and stored but skipped here — the kit renders <img> only, so <video>
+// b-roll weaving is a deliberate later phase (no broken tiles in the meantime).
+function pinUserAssets(job, jobDir) {
+  const list = (job.user_assets || []).filter((a) => a && a.path);
+  const out = [];
+  let i = 0;
+  for (const a of list) {
+    if (a.type === "video") continue;
+    let abs = a.path;
+    try { if (!fs.existsSync(abs)) continue; } catch { continue; }
+    const ext = (path.extname(abs) || ".jpg").toLowerCase().slice(0, 5);
+    const relPath = `assets/images/user_${i}${ext}`;
+    try { fs.copyFileSync(abs, path.join(jobDir, relPath)); } catch { continue; }
+    const kind = String(a.kind || "photo").toLowerCase();
+    const style = kind === "logo" ? "logo"
+      : kind === "graphic" ? "vector"
+      : kind === "screenshot" ? "screenshot"
+      : kind === "product" ? "inset"
+      : "photo";
+    // A "screenshot" kind carries the word "screenshot" in its alt so partitionAssets
+    // routes it to the SCREENSHOT pool → device-framed browser hero (chrome + scroll),
+    // the same premium treatment scraped site screenshots get.
+    const alt = kind === "logo" ? "brand logo"
+      : kind === "screenshot" ? "user website screenshot in a styled browser frame"
+      : kind === "product" ? "product image"
+      : `brand ${kind} image`;
+    out.push({
+      path: relPath, type: "image", sceneId: null, style, alt,
+      license: "user content", sourceUrl: null, source: "user-upload", fromCache: false, kind,
+    });
+    i++;
+  }
+  if (out.length) console.log(`[agents] pinned ${out.length} user-uploaded asset(s)`);
+  return out;
 }
 
 async function assetSearchAgent(s) {
@@ -320,7 +406,9 @@ async function assetSearchAgent(s) {
   }
   const got = results;
 
-  const assets = [...pinned, ...pinnedImages, ...got];
+  // User uploads FIRST — highest priority, ahead of site screenshots/scraped images/stock.
+  const userPinned = pinUserAssets(job, jobDir);
+  const assets = [...userPinned, ...pinned, ...pinnedImages, ...got];
   db.setAssets(job.id, assets);
   console.log(`[agents] asset_search: ${assets.length} asset(s) (${got.filter((a) => a.fromCache).length} from cache)`);
   return { assets };

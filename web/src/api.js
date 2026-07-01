@@ -33,12 +33,21 @@ async function json(resp) {
 }
 
 // fields: { prompt?, websiteUrl?, referenceVideo? (File), duration, orientation,
-//           quality, framePack, voiceStyle?, autopilot?, captions? }
+//           quality, framePack, voiceStyle?, autopilot?, captions?,
+//           assets? ([{ file: File, kind: "logo"|"product"|"photo"|... }]) }
+// When the user uploads their own brand assets (or a reference video) we POST
+// multipart; each asset file goes under "assets" and its kind under "assetKinds"
+// in the SAME order, so the backend can pair file ↔ kind by index.
 export async function createProject(fields) {
-  const { referenceVideo, ...rest } = fields;
-  if (referenceVideo) {
+  const { referenceVideo, assets, ...rest } = fields;
+  const assetList = Array.isArray(assets) ? assets.filter((a) => a && a.file) : [];
+  if (referenceVideo || assetList.length) {
     const form = new FormData();
-    form.append("referenceVideo", referenceVideo);
+    if (referenceVideo) form.append("referenceVideo", referenceVideo);
+    for (const a of assetList) {
+      form.append("assets", a.file);
+      form.append("assetKinds", a.kind || "photo");
+    }
     for (const [k, v] of Object.entries(rest)) {
       if (v != null && v !== "") form.append(k, String(v));
     }

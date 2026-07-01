@@ -38,7 +38,40 @@ export default function CreateScreen({ onCreated, prefill }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(prefill?.error || null);
   const [isTouch, setIsTouch] = useState(false);
+  const [assets, setAssets] = useState([]); // [{ id, file, kind, url, isVideo }]
   const fileInput = useRef(null);
+  const assetInput = useRef(null);
+
+  // Add user brand assets (logos/products/photos/graphics/b-roll). Default the kind
+  // by type; the user can re-tag each one. Object URLs are revoked on remove/unmount.
+  function addAssetFiles(fileList) {
+    const incoming = Array.from(fileList || []);
+    if (!incoming.length) return;
+    setAssets((prev) => {
+      const room = Math.max(0, 20 - prev.length);
+      const next = incoming.slice(0, room).map((file, i) => {
+        const isVideo = /^video\//.test(file.type);
+        return {
+          id: `${Date.now()}_${i}_${Math.round(Math.random() * 1e6)}`,
+          file, isVideo,
+          kind: isVideo ? "broll" : "photo",
+          url: URL.createObjectURL(file),
+        };
+      });
+      return [...prev, ...next];
+    });
+  }
+  function setAssetKind(id, kind) {
+    setAssets((prev) => prev.map((a) => (a.id === id ? { ...a, kind } : a)));
+  }
+  function removeAsset(id) {
+    setAssets((prev) => {
+      const hit = prev.find((a) => a.id === id);
+      if (hit) try { URL.revokeObjectURL(hit.url); } catch { /* noop */ }
+      return prev.filter((a) => a.id !== id);
+    });
+  }
+  useEffect(() => () => { assets.forEach((a) => { try { URL.revokeObjectURL(a.url); } catch { /* noop */ } }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     listFrames().then((f) => setPacks(f.packs || [])).catch(() => {});
@@ -68,6 +101,7 @@ export default function CreateScreen({ onCreated, prefill }) {
         ...(prompt.trim().length >= 10 ? { prompt: prompt.trim() } : {}),
         ...(tab === "url" && url.trim() ? { websiteUrl: url.trim() } : {}),
         ...(tab === "video" && file ? { referenceVideo: file } : {}),
+        ...(assets.length ? { assets: assets.map((a) => ({ file: a.file, kind: a.kind })) } : {}),
       };
       const r = await createProject(fields);
       onCreated(r.projectId);
@@ -223,6 +257,73 @@ export default function CreateScreen({ onCreated, prefill }) {
                 style={{ width: 18, height: 18, transform: captions ? "translateX(20px)" : "translateX(0)" }} />
             </button>
           </div>
+        </div>
+
+        {/* ---------- Brand assets: your own logos / products / photos ---------- */}
+        <div className="card-flat mt-3 p-4">
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <div>
+              <div className="label-mono">Your brand assets <span className="text-dim">— optional</span></div>
+              <div className="text-[11px] text-dim mt-0.5">
+                Logos, product shots, photos &amp; graphics get woven in ahead of any stock. {assets.length > 0 && `${assets.length}/20 added.`}
+              </div>
+            </div>
+            <button type="button" onClick={() => assetInput.current?.click()} className="btn-ghost shrink-0 text-sm px-3 py-1.5">
+              + Add files
+            </button>
+          </div>
+
+          <input
+            ref={assetInput} type="file" multiple hidden
+            accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml,image/avif,video/mp4,video/quicktime,video/webm"
+            onChange={(e) => { addAssetFiles(e.target.files); e.target.value = ""; }}
+          />
+
+          {assets.length === 0 ? (
+            <div
+              onClick={() => assetInput.current?.click()}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => { e.preventDefault(); addAssetFiles(e.dataTransfer.files); }}
+              className="rounded-xl py-7 text-center cursor-pointer transition-colors"
+              style={{ border: "2px dashed var(--color-line-strong)" }}
+            >
+              <p className="text-dim text-sm">Drop your logo, product photos &amp; brand images here
+                <br /><span className="text-[11px]">png · jpg · webp · svg · or mp4/mov (stored; video weaving coming soon)</span></p>
+            </div>
+          ) : (
+            <div
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => { e.preventDefault(); addAssetFiles(e.dataTransfer.files); }}
+              className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2.5"
+            >
+              {assets.map((a) => (
+                <div key={a.id} className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--color-line)", background: "var(--color-paper-2)" }}>
+                  <div className="relative aspect-square" style={{ background: "#0c0f07" }}>
+                    {a.isVideo
+                      ? <div className="w-full h-full flex items-center justify-center text-2xl" style={{ color: "#9aa18c" }}>▶</div>
+                      : <img src={a.url} alt="" className="w-full h-full object-contain" style={{ padding: a.kind === "logo" ? 8 : 0 }} />}
+                    <button type="button" onClick={() => removeAsset(a.id)} aria-label="Remove asset"
+                      className="absolute top-1 right-1 w-5 h-5 rounded-full text-[11px] flex items-center justify-center"
+                      style={{ background: "rgba(20,22,12,0.7)", color: "#fff" }}>×</button>
+                  </div>
+                  <select
+                    value={a.kind} onChange={(e) => setAssetKind(a.id, e.target.value)}
+                    className="w-full text-[11px] px-1.5 py-1 bg-transparent outline-none"
+                    style={{ color: "var(--color-ink)", borderTop: "1px solid var(--color-line)" }}
+                  >
+                    {a.isVideo
+                      ? <option value="broll">B-roll</option>
+                      : ["logo", "product", "screenshot", "photo", "background", "graphic", "character"].map((k) => (
+                          <option key={k} value={k}>{k[0].toUpperCase() + k.slice(1)}</option>
+                        ))}
+                  </select>
+                </div>
+              ))}
+              <button type="button" onClick={() => assetInput.current?.click()}
+                className="rounded-xl flex items-center justify-center text-2xl aspect-square text-dim"
+                style={{ border: "2px dashed var(--color-line-strong)" }} aria-label="Add more assets">+</button>
+            </div>
+          )}
         </div>
       </section>
 

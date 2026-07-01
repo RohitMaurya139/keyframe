@@ -73,15 +73,20 @@ function relevanceScore(qToks, tagStr) {
 async function acquire({ query, fallbackQueries = [], type, orientation, outputPath, tracker, kindPref, excludeIds, visionTopic }) {
   const queries = [query, ...fallbackQueries].filter(Boolean);
   // Vision relevance is the SLOW gate (~one model call per image). Budget it hard:
-  // only the PRIMARY query, at most VISION_MAX images. If both top candidates are
-  // off-topic the need resolves to null → the scene-kit fills it with a motif.
+  // at most VISION_MAX candidates across ANY query variant. CRITICAL invariant: when
+  // vision is enabled we NEVER accept a vision-UNCHECKED image — once the budget is
+  // spent we stop and resolve toward null → the scene-kit fills the slot with a motif.
+  // (Previously, budget exhaustion let the NEXT candidate through unchecked, which is
+  // exactly how an off-topic cache entry — the desert "old-woman" cached under a
+  // "blinking cursor" query, or a race car cached under "sleek browser" — got shipped.)
   const useVision = type === "image" && visionTopic && config.assets?.visionRelevance !== false;
-  const VISION_MAX = 2;
+  const strict = config.assets?.relevanceStrict !== false; // STRICT (default): reject anything not clearly on-subject.
+  const VISION_MAX = 3;
   let visionUsed = 0;
-  // Check the first VISION_MAX candidates across ANY query variant (the per-acquire
-  // budget is what bounds latency — restricting to the primary query let off-topic
-  // fallback-query hits slip past). Once spent, remaining candidates pass unchecked.
   const shouldVision = () => useVision && visionUsed < VISION_MAX;
+  // True only when vision is on AND its budget is spent — the signal to STOP (not to
+  // accept the current candidate unchecked).
+  const visionExhausted = () => useVision && visionUsed >= VISION_MAX;
 
   // 0 — the curated local library (user's pre-loaded packs), stills only.
   // Highest priority: hand-picked, license-clean, offline. The file keeps its
@@ -111,19 +116,26 @@ async function acquire({ query, fallbackQueries = [], type, orientation, outputP
   for (const q of queries) {
     const hits = localDb.search({ query: q, type, orientation });
     for (const hit of hits) {
-      if (shouldVision()) {
+      if (useVision) {
+        // Budget spent → STOP using the (poisoned-prone) cache rather than accept an
+        // unvetted hit; fall through to providers and ultimately a motif.
+        if (visionExhausted()) break;
         visionUsed++;
-        const fits = await imageFitsTopic({ imagePath: hit.file, topic: visionTopic, query: q, tracker });
+        const fits = await imageFitsTopic({ imagePath: hit.file, topic: visionTopic, query: q, tracker, strict });
         if (!fits) { console.log(`[assets] vision-rejected cached image for "${q}" (off-topic for the subject)`); continue; }
       }
       const meta = localDb.materialize(hit, outputPath);
       if (tracker) tracker.addExternal("asset_cache_hit");
       return { path: outputPath, query: q, fromCache: true, ...meta };
     }
+    if (visionExhausted()) break;
   }
 
   // 2 — external providers.
   for (const q of queries) {
+    // Budget already spent on the cache → don't fire (slow) provider searches we could
+    // never vet; resolve to null → motif instead.
+    if (visionExhausted()) break;
     for (const provider of providersFor(type)) {
       let candidates = [];
       try {
@@ -158,9 +170,12 @@ async function acquire({ query, fallbackQueries = [], type, orientation, outputP
         // VISION RELEVANCE — the model looks at the actual image (by URL, no download)
         // and rejects semantic misses the tag gate can't catch. Runs only on external
         // stock (curated/cache already passed their own relevance). Fail-open.
-        if (shouldVision()) {
+        if (useVision) {
+          // Budget spent → don't download/accept an unvetted stock image; stop here so
+          // the need resolves to a motif instead of shipping a plausible-but-wrong photo.
+          if (visionExhausted()) break;
           visionUsed++;
-          const fits = await imageFitsTopic({ imageUrl: c.url, topic: visionTopic, query: q, tracker });
+          const fits = await imageFitsTopic({ imageUrl: c.url, topic: visionTopic, query: q, tracker, strict });
           if (!fits) { console.log(`[assets] vision-rejected ${provider.name} image for "${q}" (off-topic for the subject)`); continue; }
         }
         try {
