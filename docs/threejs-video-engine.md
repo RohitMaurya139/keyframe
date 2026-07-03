@@ -109,9 +109,30 @@ T3 Feature=FeatureGridScene, T4 Comparison=ComparisonScene (old-way ✗ card vs 
 glow + forward depth-layer + VS divider + payoff metric — VERIFIED), T5 CTA=CtaScene. New kinds
 "dashboard"/"comparison" wired: Video switch, three_render SUPPORTED_KINDS, storyboard prompt enum +
 density rule (LLM can now choose them once the KIE key resets). scene-kit tolerates both (defaults to
-text, verified). LIVE LLM verification still BLOCKED: KIE Gemini key hit its DAILY quota (error 433) —
-retry when it resets. Remaining: card-stack/portal/morph transitions, data-stream/light-streak particle
-modes, port DOM cards → 3D meshes.
+text, verified). LIVE LLM verification still BLOCKED: KIE Gemini key hit its DAILY quota (error 433) — retry when it resets.
+
+ALL 10 TRANSITIONS + RICHER PARTICLES (2026-07-03): transitions/index.tsx now has all 10 named styles —
+push-left/right/up/down (slide 4 dirs), zoom-through, rotate-3d, parallax, card-stack, portal, morph
+(added rotateX to the Transition transform for card-stack/morph); SEAM_CYCLE reordered so the demo shows
+portal→card-stack→morph. VERIFIED on render (portal = incoming scales+rotates from a point; card-stack =
+slides up onto stack; morph = scale/rotX warp; all with the 0.8s overlap, no hard cuts). Particles:
+components/MotionStreaks.tsx adds vertical DATA STREAMS (faint guide lines + flowing bright dots) +
+diagonal LIGHT STREAKS (instanced, on depth Z=-6 behind content); wired into SceneStage (streaks prop,
+default on). Frame-driven → deterministic. So the engine now covers: 5/5 motion templates, 10/10
+transitions, particles (dots+lines+data-streams+light-streaks), depth layers, density on every scene.
+"energy trails" (distinct trailing particles) not separately added (data-streams cover the flow feel).
+
+3D CARD MESHES (2026-07-03): components/Card3D.tsx — a REAL Three.js card: drei <RoundedBox> glass panel
+(MeshStandardMaterial, catches lights) + emissive accent border (larger RoundedBox behind) + a 3D icon
+primitive per card (icosahedron/octahedron/box/torus, varied by index) + MSDF <Text> title/desc on the
+face. scenes/Feature3DScene.tsx lays out a 2x2 Card3D grid at the card depth with an MSDF headline forward,
+cards slide in from alternating sides in 3D, camera parallax. GOTCHA: content overflowed the frame under
+the lateral camera — fixed by wrapping the content group in scale 0.76 + lift 0.18. VERIFIED premium
+(glowing borders, 3D shaded icons, real depth). Wired: "feature" -> Feature3DScene (3D, DEFAULT), and
+"feature-dom" -> FeatureGridScene (the DOM version, kept — it's slightly DENSER: also has paragraph +
+metrics row, which the 3D version omits). So real prompt-videos (bullet->feature) now use 3D cards.
+TRADE-OFF: 3D = more premium depth; DOM = more content density. Both available. Live LLM density output
+still unverified (KIE key daily quota).
 
 ## Chosen stack
 - **Renderer host:** Remotion + `@remotion/three` (`<ThreeCanvas>`) + React-Three-Fiber v9 (React 19).

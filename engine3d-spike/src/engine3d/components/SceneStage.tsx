@@ -11,15 +11,17 @@ import { LightRig } from "../core/lighting";
 import { Backdrop } from "./Backdrop";
 import { ParticleField } from "./ParticleField";
 import { OrbitalRings } from "./OrbitalRings";
+import { MotionStreaks } from "./MotionStreaks";
 
 export const SceneStage: React.FC<{
   theme: Theme;
   cameraKind: CameraKind;
   durationInFrames: number;
   rings?: boolean;
+  streaks?: boolean;
   children: React.ReactNode;
   domOverlay?: React.ReactNode;
-}> = ({ theme, cameraKind, durationInFrames, rings = true, children, domOverlay }) => {
+}> = ({ theme, cameraKind, durationInFrames, rings = true, streaks = true, children, domOverlay }) => {
   const { width, height } = useVideoConfig(); // match whatever size the composition requests
   return (
     <AbsoluteFill>
@@ -35,6 +37,7 @@ export const SceneStage: React.FC<{
         <CameraRig kind={cameraKind} durationInFrames={durationInFrames} />
         {rings ? <OrbitalRings color={theme.particle} z={-3.5} opacity={0.4} /> : null}
         <ParticleField color={theme.particle} count={240} />
+        {streaks ? <MotionStreaks color={theme.particle} /> : null}
         {children}
         <EffectComposer>
           <Bloom mipmapBlur intensity={0.7} luminanceThreshold={0.35} luminanceSmoothing={0.3} />

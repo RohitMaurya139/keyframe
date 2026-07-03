@@ -12,6 +12,7 @@ import { CtaScene } from "./engine3d/scenes/CtaScene";
 import { LogoRevealScene } from "./engine3d/scenes/LogoRevealScene";
 import { ImageHeroScene } from "./engine3d/scenes/ImageHeroScene";
 import { FeatureGridScene } from "./engine3d/scenes/FeatureGridScene";
+import { Feature3DScene } from "./engine3d/scenes/Feature3DScene";
 import { DashboardScene } from "./engine3d/scenes/DashboardScene";
 import { ComparisonScene } from "./engine3d/scenes/ComparisonScene";
 import { Watermark } from "./engine3d/components/Watermark";
@@ -25,7 +26,8 @@ const SceneComponent: React.FC<SceneProps> = (props) => {
   switch (props.scene.kind) {
     case "hook": return <HookScene {...props} />;
     case "stat": case "chart": return <StatScene {...props} />;
-    case "feature": return <FeatureGridScene {...props} />;
+    case "feature": return <Feature3DScene {...props} />;
+    case "feature-dom": return <FeatureGridScene {...props} />;
     case "dashboard": return <DashboardScene {...props} />;
     case "comparison": return <ComparisonScene {...props} />;
     case "bullet": case "caption": case "quote": return <TextScene {...props} />;
