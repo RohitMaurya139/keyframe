@@ -1,0 +1,133 @@
+Bundling 6%
+Bundling 12%
+Bundling 25%
+Bundling 65%
+Bundling 71%
+Bundling 76%
+Bundling 81%
+Bundling 86%
+Bundling 91%
+Bundling 98%
+Bundling 100%
+Getting composition
+[90mComposition          Film[39m
+[90mCodec                h264[39m
+[90mOutput               out/film2.mp4[39m
+[90mConcurrency          2x[39m
+Rendered 0/105
+Rendered 1/105, time remaining: 2m 15s
+Rendered 2/105, time remaining: 1m 8s
+Rendered 3/105, time remaining: 50s
+Rendered 4/105, time remaining: 37s
+Rendered 5/105, time remaining: 31s
+Rendered 6/105, time remaining: 26s
+Rendered 7/105, time remaining: 24s
+Rendered 8/105, time remaining: 21s
+Rendered 9/105, time remaining: 20s
+Rendered 10/105, time remaining: 18s
+Rendered 11/105, time remaining: 16s
+Rendered 12/105, time remaining: 15s
+Rendered 13/105, time remaining: 14s
+Rendered 14/105, time remaining: 13s
+Rendered 15/105, time remaining: 12s
+Rendered 16/105, time remaining: 12s
+Rendered 17/105, time remaining: 11s
+Rendered 18/105, time remaining: 10s
+Rendered 19/105, time remaining: 10s
+Rendered 20/105, time remaining: 10s
+Rendered 21/105, time remaining: 9s
+Rendered 22/105, time remaining: 9s
+Rendered 23/105, time remaining: 8s
+Rendered 24/105, time remaining: 8s
+Rendered 25/105, time remaining: 8s
+Rendered 26/105, time remaining: 7s
+Rendered 27/105, time remaining: 7s
+Rendered 28/105, time remaining: 7s
+Rendered 29/105, time remaining: 7s
+Rendered 30/105, time remaining: 6s
+Rendered 31/105, time remaining: 6s
+Rendered 32/105, time remaining: 6s
+Rendered 33/105, time remaining: 6s
+Rendered 34/105, time remaining: 6s
+Rendered 35/105, time remaining: 6s
+Rendered 36/105, time remaining: 5s
+Rendered 37/105, time remaining: 5s
+Rendered 38/105, time remaining: 5s
+Rendered 39/105, time remaining: 5s
+Rendered 40/105, time remaining: 5s
+Rendered 41/105, time remaining: 5s
+Rendered 42/105, time remaining: 4s
+Rendered 43/105, time remaining: 4s
+Rendered 44/105, time remaining: 4s
+Rendered 45/105, time remaining: 4s
+Rendered 46/105, time remaining: 4s
+Rendered 47/105, time remaining: 4s
+Rendered 48/105, time remaining: 4s
+Rendered 49/105, time remaining: 4s
+Rendered 50/105, time remaining: 4s
+Rendered 51/105, time remaining: 3s
+Rendered 52/105, time remaining: 3s
+Rendered 53/105, time remaining: 3s
+Rendered 54/105, time remaining: 3s
+Rendered 55/105, time remaining: 3s
+Rendered 56/105, time remaining: 3s
+Rendered 57/105, time remaining: 3s
+Rendered 58/105, time remaining: 3s
+Rendered 59/105, time remaining: 3s
+Rendered 60/105, time remaining: 3s
+Rendered 61/105, time remaining: 3s
+Rendered 62/105, time remaining: 2s
+Rendered 63/105, time remaining: 2s
+Rendered 64/105, time remaining: 2s
+Rendered 65/105, time remaining: 2s
+Rendered 66/105, time remaining: 2s
+Rendered 67/105, time remaining: 2s
+Rendered 68/105, time remaining: 2s
+Rendered 69/105, time remaining: 2s
+Rendered 70/105, time remaining: 2s
+Rendered 71/105, time remaining: 2s
+Rendered 72/105, time remaining: 2s
+Rendered 73/105, time remaining: 2s
+Rendered 74/105, time remaining: 1s
+Rendered 75/105, time remaining: 1s
+Rendered 76/105, time remaining: 1s
+Rendered 77/105, time remaining: 1s
+Rendered 78/105, time remaining: 1s
+Rendered 79/105, time remaining: 1s
+Rendered 80/105, time remaining: 1s
+Rendered 81/105, time remaining: 1s
+Rendered 82/105, time remaining: 1s
+Rendered 83/105, time remaining: 1s
+Rendered 84/105, time remaining: 1s
+Rendered 85/105, time remaining: 1s
+Rendered 86/105, time remaining: 1s
+Rendered 87/105, time remaining: 1s
+Rendered 88/105, time remaining: 1s
+Rendered 89/105, time remaining: 0s
+Rendered 89/105, time remaining: 0s
+Rendered 90/105, time remaining: 0s
+Rendered 91/105, time remaining: 0s
+Rendered 92/105, time remaining: 0s
+Rendered 93/105, time remaining: 0s
+Rendered 94/105, time remaining: 0s
+Rendered 95/105, time remaining: 0s
+Rendered 96/105, time remaining: 0s
+Rendered 97/105, time remaining: 0s
+Rendered 98/105, time remaining: 0s
+Rendered 99/105, time remaining: 0s
+Rendered 100/105, time remaining: 0s
+Rendered 100/105, time remaining: 0s
+Rendered 101/105, time remaining: 0s
+Rendered 102/105, time remaining: 0s
+Rendered 103/105, time remaining: 0s
+Rendered 104/105, time remaining: 0s
+Rendered 105/105
+Encoded 6/105
+Encoded 22/105
+Encoded 32/105
+Encoded 42/105
+Encoded 54/105
+Encoded 67/105
+Encoded 84/105
+Encoded 105/105
+[34m+                    out/film2.mp4[39m [90m2.9 MB[39m

@@ -10,7 +10,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
-const openrouter = require("./../services/openrouter");
+const llm = require("./../services/llm");
 const { extractFirstJsonObject } = require("../services/json_lenient");
 
 function extractFrame(videoPath, atSec, outPath) {
@@ -95,7 +95,7 @@ async function reviewRender({ videoPath, scenes, duration, framePack, frameMd, w
     })),
   ];
 
-  const { text, tokensIn, tokensOut } = await openrouter.chat({
+  const { text, tokensIn, tokensOut } = await llm.chat({
     system: "You are a meticulous video QA director. Strict JSON only.",
     user: content,
     jsonMode: true,

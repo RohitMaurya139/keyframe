@@ -14,10 +14,42 @@
 // generic text). Screenshot-hero, split-diagram, asset-grid, terminal, and the
 // full per-pack skinning table are filled in from the scenekit-design pass.
 
+const fs = require("node:fs");
+const path = require("node:path");
+const config = require("../config");
 const frameRegistry = require("./frame_registry");
 const { themeFromTokens } = require("./enrich");
 const packAtoms = require("./pack_atoms");
 const { buildMotif } = require("./scene_motifs");
+
+// Pack DISPLAY fonts are bundled as woff2 under server/assets/fonts and embedded as
+// data-URI @font-face at build time. The pinned renderer only auto-resolves a handful of
+// web-safe faces, so without this a pack's real display font (Anton, Fraunces, …) fell
+// back to Inter and every pack looked identical. Cached base64 (read once per process).
+const FONTS_DIR = path.resolve(__dirname, "..", "..", "assets", "fonts");
+const _fontCache = new Map();
+function fontFileFor(face) {
+  return String(face || "").toLowerCase().trim().replace(/\s+/g, "-"); // "Space Grotesk" → "space-grotesk"
+}
+// @font-face CSS (data-URI) for a display face, or "" if we don't bundle it (→ falls back
+// to Inter, no lint error). Family name is the exact face so `'Anton'` in CSS resolves.
+function fontFaceCss(face) {
+  if (!face) return "";
+  if (_fontCache.has(face)) return _fontCache.get(face);
+  let css = "";
+  try {
+    const file = path.join(FONTS_DIR, `${fontFileFor(face)}.woff2`);
+    const b64 = fs.readFileSync(file).toString("base64");
+    css = `@font-face{font-family:'${face}';font-display:swap;src:url(data:font/woff2;base64,${b64}) format('woff2');}`;
+  } catch { css = ""; }
+  _fontCache.set(face, css);
+  return css;
+}
+// Headline font: the pack's DISPLAY face when it's bundled (so it actually renders),
+// else the safe Inter stack. Body/subtext always use cssFont (Inter).
+function cssHead(theme) {
+  return (theme && theme.displayFace && fontFaceCss(theme.displayFace)) ? theme.displayFont : (theme ? theme.fontStack : SAFE_FONTS);
+}
 
 // SINGLE-quoted family names — these are embedded in double-quoted style="..."
 // attributes, so a double quote here would terminate the attribute early and kill
@@ -53,6 +85,14 @@ function lum(hex) {
 function deriveTheme(framePack, storyboard) {
   const tokens = framePack && framePack !== "auto" ? frameRegistry.getPackTokens(framePack) : null;
   const pal = (storyboard && storyboard.palette) || {};
+  // BRAND COLORS (scraped from the site / provided) drive the ACCENTS — the pops:
+  // text emphasis, glows, rules, buttons, motifs — so every video reads on-brand.
+  // The PACK still owns ground, fonts and structure, so we keep its cinematic
+  // identity instead of flattening to a recolor. Colors that vanish against the
+  // ground are dropped by the contrast filter below.
+  const brandColors = (((storyboard && storyboard.brandColors) || []))
+    .filter((c) => /^#[0-9a-f]{6}$/i.test(String(c || "").trim()))
+    .map((c) => c.trim());
   let ground, ink, accents, fonts;
 
   if (tokens) {
@@ -80,23 +120,46 @@ function deriveTheme(framePack, storyboard) {
   // word or gradient fades into the background. Backfill with safe brights so we
   // always have ≥2 visible accents.
   const safeBright = isDark ? ["#7CC4FF", "#FF7DB4", "#FFC878", "#8BE0A4"] : ["#3B5BFF", "#E2563C", "#1E9E5A", "#C9A227"];
-  accents = accents.filter((a) => Math.abs(lum(a) - lum(ground)) > 55);
-  for (const c of safeBright) { if (accents.length >= 2) break; if (!accents.includes(c)) accents.push(c); }
+  // Brand colors that already contrast are used as-is; ones that would VANISH against
+  // the ground (a dark-navy brand on a near-black pack) are LIFTED — same hue, forced
+  // to a visible lightness + vivid saturation — so the brand's colour identity still
+  // shows instead of being silently dropped. This is what makes the accents on-brand.
+  const liftAccent = (c) => {
+    if (Math.abs(lum(c) - lum(ground)) > 55) return c;
+    const [h, s] = hexToHsl(c);
+    const lifted = hslToHex(h, Math.min(1, Math.max(0.58, s)), isDark ? 0.62 : 0.42);
+    return Math.abs(lum(lifted) - lum(ground)) > 45 ? lifted : null;
+  };
+  const brandAccents = brandColors.map(liftAccent).filter(Boolean);
+  // Brand accents take PRIORITY (prepended), then pack accents, then safe brights backfill —
+  // all through the same ground-contrast filter so nothing muddy survives.
+  accents = [...brandAccents, ...accents].filter((a) => Math.abs(lum(a) - lum(ground)) > 55);
+  accents = [...new Map(accents.map((c) => [c.toLowerCase(), c])).values()]; // dedup, keep first/order
+  for (const c of safeBright) { if (accents.length >= 2) break; if (!accents.some((a) => a.toLowerCase() === c.toLowerCase())) accents.push(c); }
   accents = accents.slice(0, 4);
   // Force maximum text contrast against the ground (the storyboard's text hex is
   // often a mid-tone that reads as muddy).
   ink = isDark ? "#FFFFFF" : "#14130E";
-  // Only fonts the offline renderer can auto-resolve may appear in CSS — a pack's
-  // display font (e.g. "Space Grotesk") would fall back anyway and trips lint, so
-  // (matching the composer's normalize) we render on the safe stack and express
-  // the pack's type identity through weight / case / tracking instead.
-  const RESOLVABLE = new Set(["inter", "roboto", "arial", "helvetica", "georgia", "system-ui"]);
-  const lead = fonts.filter((f) => RESOLVABLE.has(String(f).toLowerCase().trim()));
+  // BODY stays on the safe stack (Inter is a great, legible body face on every pack).
+  // The DISPLAY font is the pack's IDENTITY (Anton, Fraunces, Space Grotesk, Archivo
+  // Black, Instrument Serif…) — HyperFrames' compiler embeds these Google faces
+  // automatically, so headlines now carry each pack's real typographic personality
+  // instead of all rendering in Inter (the #1 reason every pack looked identical).
+  const MONO = new Set(["jetbrains mono", "fira code", "cascadia code", "ibm plex mono"]);
+  const faceCands = (fonts || [])
+    .map((f) => String(f || "").trim())
+    .filter((f) => f && f.toLowerCase() !== "inter" && !MONO.has(f.toLowerCase()));
+  // Prefer the pack's MOST display-y face (last in its list — e.g. bauhaus "Archivo Black"
+  // over "Archivo", biennale "Instrument Serif" over "Archivo") that we actually bundle a
+  // woff2 for; fall back to the first bundled one, else none (→ Inter, no lint error).
+  const displayFace = [...faceCands].reverse().find((f) => fontFaceCss(f)) || faceCands.find((f) => fontFaceCss(f)) || null;
   return {
     ground, ink, accents,
     accent: accents[0],
     accent2: accents[1] || accents[0],
-    fontStack: lead.length ? `${lead.map((f) => `'${f}'`).join(", ")}, ${SAFE_FONTS}` : SAFE_FONTS,
+    fontStack: SAFE_FONTS,
+    displayFont: displayFace ? `'${displayFace}', ${SAFE_FONTS}` : SAFE_FONTS,
+    displayFace: displayFace || null,
     isDark,
     gradients: !flat,          // flat packs: solid fills + hard borders only
     dim: isDark ? "rgba(255,255,255,0.62)" : "rgba(20,18,12,0.62)",
@@ -135,6 +198,18 @@ function emitHelpers(D) {
     // that centering. Each archetype passes a different from→to + transform-origin
     // so adjacent scenes never share the same camera language.
     `function cam(sel,at,dur,from,to,org){ tl.fromTo(sel,{scale:from},{scale:to,duration:dur,ease:"none",transformOrigin:org||"50% 50%"},at); }`,
+    // cam3D(sel, at, dur, s0, s1, org) — a real CSS-3D camera move: scale push PLUS a slow
+    // yaw/pitch/dolly (rotationY/rotationX/z) with per-element perspective, so the scene
+    // lives in 3D space (depth + parallax) instead of a flat plane. One tween → no transform
+    // conflict. Pure CSS transforms, so HyperFrames captures it deterministically (unlike WebGL).
+    `function cam3D(sel,at,dur,s0,s1,org){ tl.fromTo(sel,{scale:s0,rotationY:-3.4,rotationX:1.4,z:-46,transformPerspective:1400},{scale:s1,rotationY:3.4,rotationX:-0.6,z:16,duration:dur,ease:"sine.inOut",transformOrigin:org||"50% 50%"},at); }`,
+    // cam3Dz(sel, at, dur, s0, s1, org) — the DEPTH-PLANE camera. Same yaw/pitch/dolly as
+    // cam3D but with NO baked transformPerspective: the lens (`perspective:1400px`) lives on
+    // the scene ROOT (#id .clip) instead, so it governs the WHOLE 3D scene at once. That lets
+    // the preserve-3d child layers inside #idc — pushed to different translateZ via GSAP `z`
+    // (kicker forward, headline at 0, sub back, rule foreground) — parallax against each other
+    // as this container rotates. Real per-layer depth separation from a single tween.
+    `function cam3Dz(sel,at,dur,s0,s1,org){ tl.fromTo(sel,{scale:s0,rotationY:-5.4,rotationX:1.8,z:-34},{scale:s1,rotationY:5.4,rotationX:-1.0,z:16,duration:dur,ease:"sine.inOut",transformOrigin:org||"50% 50%"},at); }`,
     `function countUp(id,to,at,dur,fmt){ var o={v:0}; tl.to(o,{v:to,duration:dur,ease:"power2.out",snap:{v:1},onUpdate:function(){var el=document.getElementById(id);if(el)el.textContent=fmt(Math.round(o.v));}},at); }`,
     // typeLine — types `txt` into #id character-by-character (deterministic: an index
     // proxy + snap + onUpdate writing the substring, no per-char tweens, no randomness).
@@ -154,8 +229,94 @@ function emitHelpers(D) {
       + `if(mode==="wipe"){tl.to(sel,{scaleX:0,opacity:0,duration:0.45,ease:"power3.inOut",transformOrigin:"100% 50%"},at);tl.set(sel,{opacity:0},end);return;}`
       + `if(mode==="scale-through"){tl.to(sel,{scale:1.12,opacity:0,duration:0.5,ease:"power2.in",transformOrigin:"50% 50%"},at);tl.set(sel,{opacity:0},end);return;}`
       + `if(mode==="hard-cut"){tl.set(sel,{opacity:0},end);return;}`
+      // 3D exits — the scene swings/turns away in perspective (a real 3D handoff, not a fade).
+      + `if(mode==="flip3d"){tl.to(sel,{rotationY:-80,z:-190,opacity:0,transformPerspective:1400,duration:0.55,ease:"power2.in",transformOrigin:"0% 50%"},at);tl.set(sel,{opacity:0},end);return;}`
+      + `if(mode==="cube"){tl.to(sel,{rotationY:-90,z:-120,opacity:0,transformPerspective:1400,duration:0.55,ease:"power2.inOut",transformOrigin:"50% 50%"},at);tl.set(sel,{opacity:0},end);return;}`
+      + `if(mode==="door"){tl.to(sel,{rotationY:84,z:-150,opacity:0,transformPerspective:1400,duration:0.55,ease:"power2.in",transformOrigin:"100% 50%"},at);tl.set(sel,{opacity:0},end);return;}`
       + `tl.to(sel,{opacity:0,duration:0.3,ease:"power2.in"},at);tl.set(sel,{opacity:0},end);}`,
   ].join("\n");
+}
+
+// Ambient MOTIF treatments. Two videos in the SAME pack used to share the identical
+// dots+grid ambient (only dot POSITIONS varied by seed) → they read as one template.
+// A seed-selected mode gives each video a structurally different backdrop while staying
+// on-pack. All motion is finite-repeat GSAP tweens (deterministic capture, occlusion-safe).
+const AMBIENT_MODES = ["constellation", "orbits", "rays", "scatter"];
+
+function ambientMotif(mode, theme, dims, D, sd) {
+  const { accent, accent2, ink, gradients } = theme;
+  const W = dims.width, H = dims.height;
+  const html = [], script = [];
+  const col3 = [accent, accent2, ink];
+  const svgWrap = (id, inner, extra = "") =>
+    `<div id="${id}" class="clip" data-start="0" data-duration="${D}" data-track-index="2" data-layout-allow-occlusion style="${extra}"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid slice" style="position:absolute;inset:0;width:100%;height:100%;">${inner}</svg></div>`;
+  const grid = (mul = 1) => {
+    const gridCol = rgba(ink, (gradients ? 0.04 : 0.06) * mul);
+    const mask = gradients ? "-webkit-mask-image:radial-gradient(80% 80% at 50% 45%,#000 35%,transparent 90%);mask-image:radial-gradient(80% 80% at 50% 45%,#000 35%,transparent 90%);" : "";
+    return `<div class="clip" data-start="0" data-duration="${D}" data-track-index="3" data-layout-allow-occlusion style="background-image:linear-gradient(${gridCol} 1px,transparent 1px),linear-gradient(90deg,${gridCol} 1px,transparent 1px);background-size:46px 46px;${mask}"></div>`;
+  };
+
+  if (mode === "minimal" || mode === "constellation") {
+    const N = mode === "minimal" ? 5 : 12;
+    const circ = [];
+    for (let i = 0; i < N; i++) {
+      const cx = Math.round(((i * 97 + 60 + sd) % 100) / 100 * W);
+      const cy = Math.round(((i * 53 + 40 + sd * 7) % 100) / 100 * H);
+      circ.push(`<circle class="kfdust${i}" cx="${cx}" cy="${cy}" r="${2 + (i % 4)}" fill="${col3[i % 3]}" opacity="${(0.28 + (i % 5) * 0.05).toFixed(2)}"/>`);
+    }
+    html.push(svgWrap("kfamb", circ.join("")));
+    if (mode === "constellation") html.push(grid());
+    script.push(`for(var i=0;i<${N};i++){var pd=7+(i%5);tl.to(".kfdust"+i,{attr:{cy:"-="+(40+(i%4)*18)},x:(i%2?12:-12),duration:pd,ease:"sine.inOut",yoyo:true,repeat:reps(pd)},0);}`);
+    return { html, script };
+  }
+
+  if (mode === "orbits") {
+    const cx = Math.round((0.5 + ((sd % 7) - 3) * 0.05) * W);
+    const cy = Math.round((0.44 + ((sd % 5) - 2) * 0.05) * H);
+    let inner = "";
+    [0.13, 0.21, 0.30].forEach((f, k) => {
+      inner += `<ellipse cx="${cx}" cy="${cy}" rx="${Math.round(W * f)}" ry="${Math.round(H * f * 0.95)}" fill="none" stroke="${rgba(col3[k % 3], 0.22)}" stroke-width="1.4" stroke-dasharray="2 11"/>`;
+    });
+    for (let i = 0; i < 8; i++) {
+      const ang = (i / 8) * 6.2832 + sd, rr = 0.13 + (i % 3) * 0.085;
+      inner += `<g class="kfdust${i}"><circle cx="${Math.round(cx + Math.cos(ang) * W * rr)}" cy="${Math.round(cy + Math.sin(ang) * H * rr * 0.95)}" r="${3 + (i % 3)}" fill="${col3[i % 2]}" opacity="0.5"/></g>`;
+    }
+    html.push(svgWrap("kfamb", inner, "transform-origin:50% 50%;"));
+    script.push(`tl.to("#kfamb",{scale:1.05,duration:13,ease:"sine.inOut",yoyo:true,repeat:reps(13)},0);`);
+    script.push(`for(var i=0;i<8;i++){var pd=8+(i%4);tl.to(".kfdust"+i,{x:(i%2?14:-14),y:(i%3?-10:10),duration:pd,ease:"sine.inOut",yoyo:true,repeat:reps(pd)},0);}`);
+    return { html, script };
+  }
+
+  if (mode === "rays") {
+    const ox = (sd % 2 === 0 ? 0.82 : 0.18) * W, oy = 0.16 * H;
+    let inner = "";
+    for (let i = 0; i < 7; i++) {
+      const ang = (-35 + i * 9 + (sd % 5) * 3) * Math.PI / 180, len = W * 0.95;
+      inner += `<g class="kfray${i}"><line x1="${Math.round(ox)}" y1="${Math.round(oy)}" x2="${Math.round(ox + Math.cos(ang) * len)}" y2="${Math.round(oy + Math.sin(ang) * len)}" stroke="${rgba(col3[i % 2], 0.14)}" stroke-width="${2 + (i % 2)}"/></g>`;
+    }
+    html.push(svgWrap("kfamb", inner));
+    html.push(grid(0.55));
+    script.push(`for(var i=0;i<7;i++){var pd=6+(i%4);tl.fromTo(".kfray"+i,{opacity:0.06},{opacity:0.22,duration:pd,ease:"sine.inOut",yoyo:true,repeat:reps(pd)},i*0.3);}`);
+    return { html, script };
+  }
+
+  // scatter — small geometric shapes floating (each wrapped in a <g> so GSAP translate
+  // never clobbers a shape's own rotate transform).
+  const shapes = [];
+  for (let i = 0; i < 14; i++) {
+    const cx = Math.round(((i * 89 + 50 + sd * 3) % 100) / 100 * W);
+    const cy = Math.round(((i * 61 + 30 + sd * 5) % 100) / 100 * H);
+    const s = 6 + (i % 4) * 4, c = rgba(col3[i % 3], 0.5), kind = i % 3;
+    const shape = kind === 0
+      ? `<rect x="${cx}" y="${cy}" width="${s}" height="${s}" fill="none" stroke="${c}" stroke-width="1.5" transform="rotate(45 ${cx + s / 2} ${cy + s / 2})"/>`
+      : kind === 1
+        ? `<circle cx="${cx}" cy="${cy}" r="${s / 2}" fill="${c}"/>`
+        : `<path d="M${cx - s} ${cy}H${cx + s}M${cx} ${cy - s}V${cy + s}" stroke="${c}" stroke-width="1.5"/>`;
+    shapes.push(`<g class="kfsh${i}">${shape}</g>`);
+  }
+  html.push(svgWrap("kfamb", shapes.join("")));
+  script.push(`for(var i=0;i<14;i++){var pd=7+(i%6);tl.to(".kfsh"+i,{y:(i%2?-26:26),x:(i%3?10:-10),duration:pd,ease:"sine.inOut",yoyo:true,repeat:reps(pd)},0);}`);
+  return { html, script };
 }
 
 // Background depth stack — persistent, tracks 0–3, full duration, never exits.
@@ -183,37 +344,37 @@ function buildBackground(theme, dims, D, framePack, seed) {
   for (const h of sig.html) parts.push(h);
   const reduceAmbient = sig.reduceAmbient;
 
-  // ambient particle field (authored — drifts on a finite-repeat tween)
-  const N = reduceAmbient ? 5 : 12;
-  const circ = [];
-  for (let i = 0; i < N; i++) {
-    const cx = Math.round(((i * 97 + 60 + sd) % 100) / 100 * W);
-    const cy = Math.round(((i * 53 + 40 + sd * 7) % 100) / 100 * H);
-    const r = 2 + (i % 4);
-    const col = [accent, accent2, theme.ink][i % 3];
-    const op = (0.28 + (i % 5) * 0.05).toFixed(2);
-    circ.push(`<circle class="kfdust${i}" cx="${cx}" cy="${cy}" r="${r}" fill="${col}" opacity="${op}"/>`);
-  }
-  parts.push(`<div class="clip" data-start="0" data-duration="${D}" data-track-index="2" data-layout-allow-occlusion><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid slice" style="position:absolute;inset:0;width:100%;height:100%;">${circ.join("")}</svg></div>`);
-
-  // grid / rule motif (masked for gradient packs; faint solid for flat packs).
-  // Skipped on signature packs — their atom (spotlight/bloom) IS the depth motif and
-  // a grid on top would clutter the deliberate sparseness.
-  if (!reduceAmbient) {
-    const gridCol = rgba(theme.ink, gradients ? 0.04 : 0.06);
-    const mask = gradients ? "-webkit-mask-image:radial-gradient(80% 80% at 50% 45%,#000 35%,transparent 90%);mask-image:radial-gradient(80% 80% at 50% 45%,#000 35%,transparent 90%);" : "";
-    parts.push(`<div class="clip" data-start="0" data-duration="${D}" data-track-index="3" data-layout-allow-occlusion style="background-image:linear-gradient(${gridCol} 1px,transparent 1px),linear-gradient(90deg,${gridCol} 1px,transparent 1px);background-size:46px 46px;${mask}"></div>`);
-  }
+  // ambient MOTIF — seed-selected treatment (constellation / orbits / rays / scatter) so
+  // two videos in the SAME pack get a structurally different backdrop. Signature packs
+  // (noir/biennale) keep their deliberate sparseness (minimal), letting the atom lead.
+  const mode = reduceAmbient ? "minimal" : AMBIENT_MODES[sd % AMBIENT_MODES.length];
+  const motif = ambientMotif(mode, theme, dims, D, sd);
+  for (const h of motif.html) parts.push(h);
 
   const script = [];
   for (const sc of sig.script) script.push(sc);
   if (gradients) script.push(`tl.fromTo("#kfbgGlow",{xPercent:-4,yPercent:-3,scale:1},{xPercent:4,yPercent:3,scale:1.07,duration:10,ease:"sine.inOut",yoyo:true,repeat:reps(10)},0);`);
-  script.push(`for(var i=0;i<${N};i++){var pd=7+(i%5);tl.to(".kfdust"+i,{attr:{cy:"-="+(40+(i%4)*18)},x:(i%2?12:-12),duration:pd,ease:"sine.inOut",yoyo:true,repeat:reps(pd)},0);}`);
+  for (const sc of motif.script) script.push(sc);
   return { html: parts.join("\n  "), script: script.join("\n") };
 }
 
 // ---- color utils -------------------------------------------------------------
 function hexToRgb(hex) { const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || "").trim()); if (!m) return [124, 124, 124]; const n = parseInt(m[1], 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+function hexToHsl(hex) {
+  const [r, g, b] = hexToRgb(hex).map((v) => v / 255);
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b); let h = 0, s = 0; const l = (mx + mn) / 2; const d = mx - mn;
+  if (d) { s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn); h = mx === r ? ((g - b) / d + (g < b ? 6 : 0)) : mx === g ? ((b - r) / d + 2) : ((r - g) / d + 4); h /= 6; }
+  return [h, s, l];
+}
+function hslToHex(h, s, l) {
+  let r, g, b;
+  if (!s) { r = g = b = l; } else {
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
+    const hue = (t) => { if (t < 0) t += 1; if (t > 1) t -= 1; if (t < 1 / 6) return p + (q - p) * 6 * t; if (t < 1 / 2) return q; if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6; return p; };
+    r = hue(h + 1 / 3); g = hue(h); b = hue(h - 1 / 3);
+  }
+  return "#" + [r, g, b].map((v) => Math.round(v * 255).toString(16).padStart(2, "0")).join("");
+}
 function rgba(hex, a) { const [r, g, b] = hexToRgb(hex); return `rgba(${r},${g},${b},${a})`; }
 function mix(hex, with_, t) { const a = hexToRgb(hex), b = hexToRgb(with_); const c = a.map((v, i) => Math.round(v + (b[i] - v) * t)); return `#${c.map((v) => v.toString(16).padStart(2, "0")).join("")}`; }
 
@@ -253,7 +414,7 @@ function photoGrade(theme) {
 // timed `beats` per scene. These sanitize that intent into safe enums + anchors
 // the archetypes execute, so the LLM's direction actually reaches the screen.
 const ANIMS = new Set(["word-stagger", "mask-reveal", "blur-sharp", "scale-pop", "slide-up", "slide-left", "ken-burns-text", "typewriter"]);
-const TRANS = new Set(["fade", "slide-left", "wipe", "scale-through", "hard-cut", "none"]);
+const TRANS = new Set(["fade", "slide-left", "wipe", "scale-through", "hard-cut", "none", "flip3d", "cube", "door"]);
 const LAYOUTS = ["fullbleed", "split-60-40", "centered-card", "grid-2x2"];
 
 function revealMode(scene) {
@@ -261,17 +422,24 @@ function revealMode(scene) {
   if (a === "typewriter") return "word-stagger"; // no terminal archetype yet → clean stagger
   return ANIMS.has(a) ? a : "word-stagger";
 }
-function transOut(scene, isLast) {
+function transOut(scene, isLast, i, off = 0) {
   if (isLast) return "none";
   const t = String((scene && scene.transitionOut) || "").toLowerCase().trim();
-  return TRANS.has(t) ? t : "fade";
+  if (TRANS.has(t)) return t;
+  // No authored transition → give the film real 3D HANDOFFS (a scene swinging/turning away
+  // in perspective) on alternating seams, softer moves between, so it reads as motion
+  // graphics, not slides. Deterministic by scene index (+ per-video seed offset, so two
+  // videos don't share the same seam sequence) → a re-render is identical.
+  const cycle = ["flip3d", "scale-through", "cube", "slide-left", "door", "wipe"];
+  return cycle[(Math.max(0, i || 0) + off) % cycle.length];
 }
-// Honor the storyboard's layout; if it's missing/invalid the kit ROTATES by index
-// so adjacent scenes never share a zone map (variety is what reads as "produced").
-function layoutFor(scene, i) {
+// Honor the storyboard's layout; if it's missing/invalid the kit ROTATES by index (+ a
+// per-video seed offset) so adjacent scenes never share a zone map AND two videos don't
+// start the rotation at the same layout — variety is what reads as "produced".
+function layoutFor(scene, i, off = 0) {
   const l = String((scene && scene.layout) || "").toLowerCase().trim();
   if (LAYOUTS.includes(l)) return l;
-  return LAYOUTS[i % LAYOUTS.length];
+  return LAYOUTS[(i + off) % LAYOUTS.length];
 }
 
 // placeContent(layout, dims) → outer content-box position + alignment. THIS is what
@@ -352,21 +520,23 @@ function archHook(scene, ctx) {
   const { headAt, exitAt } = ctx.timing, end = ctx.clipEnd;
   const kAt = r(Math.max(T + 0.1, headAt - 0.15)), subAt = r(headAt + 0.6), uAt = r(headAt + 0.7);
   const camOrg = ctx.layout === "fullbleed" ? "50% 100%" : "50% 50%";
-  const html = `<div id="${id}" class="clip" data-start="${T}" data-duration="${ctx.clipDur}" data-track-index="${track}" style="opacity:0;">
-  <div id="${id}c" style="${place.box}${center ? "text-align:center;" : ""}">
+  const html = `<div id="${id}" class="clip" data-start="${T}" data-duration="${ctx.clipDur}" data-track-index="${track}" style="opacity:0;perspective:1400px;">
+  <div id="${id}c" style="${place.box}${center ? "text-align:center;" : ""}transform-style:preserve-3d;">
     <span id="${id}k" style="opacity:0;display:inline-flex;align-items:center;gap:10px;padding:8px 16px;border-radius:9999px;background:${theme.panel};border:1px solid ${theme.line};color:${theme.accent};font:700 15px/1 ${cssFont(theme)};letter-spacing:.2em;text-transform:uppercase;"><span style="width:8px;height:8px;border-radius:50%;background:${theme.accent};"></span>${esc(ctx.kicker || "KEYFRAME")}</span>
-    <h1 class="kfhead" style="margin-top:18px;font:800 ${big}px/0.99 ${cssFont(theme)};letter-spacing:-0.02em;color:${theme.ink};max-width:${center ? "18ch" : "14ch"};${ctr}"><style>#${id} .kfacc{${accentText}}</style>${headlineSpans(scene.headline, scene.emphasis, theme)}</h1>
+    <h1 class="kfhead" style="margin-top:18px;font:800 ${big}px/0.99 ${cssHead(theme)};letter-spacing:-0.02em;color:${theme.ink};max-width:${center ? "18ch" : "14ch"};${ctr}"><style>#${id} .kfacc{${accentText}}</style>${headlineSpans(scene.headline, scene.emphasis, theme)}</h1>
     ${scene.subtext ? `<p id="${id}s" style="opacity:0;margin-top:16px;font:500 ${Math.round(big * 0.3)}px/1.45 ${cssFont(theme)};color:${theme.dim};max-width:42ch;${ctr}">${esc(scene.subtext)}</p>` : ""}
     <div id="${id}u" style="margin-top:20px;width:${Math.round(big * 3)}px;max-width:42%;height:5px;border-radius:3px;background:linear-gradient(90deg,${theme.accent},${theme.accent2});transform:scaleX(0);transform-origin:left center;${ctr}"></div>
   </div>
 </div>`;
   const s = [
     `tl.set("#${id}",{opacity:1},${T});`,
-    `cam("#${id}c",${T},${r(ctx.clipDur)},1.0,1.055,"${camOrg}");`,
-    `tl.fromTo("#${id}k",{opacity:0,y:14},{opacity:1,y:0,duration:0.5},${kAt});`,
+    // Depth-plane camera: the layers below sit at different translateZ (set via GSAP `z`
+    // so the transform isn't clobbered) and parallax as this preserve-3d box rotates.
+    `cam3Dz("#${id}c",${T},${r(ctx.clipDur)},1.0,1.055,"${camOrg}");`,
+    `tl.fromTo("#${id}k",{opacity:0,y:14,z:64},{opacity:1,y:0,z:64,duration:0.5},${kAt});`,
     `reveal("${id}",${headAt},"${ctx.mode}",0.09);`,
-    scene.subtext ? `tl.fromTo("#${id}s",{opacity:0,y:20},{opacity:1,y:0,duration:0.55},${subAt});` : "",
-    `tl.fromTo("#${id}u",{scaleX:0},{scaleX:1,duration:0.7,ease:"power3.inOut"},${uAt});`,
+    scene.subtext ? `tl.fromTo("#${id}s",{opacity:0,y:20,z:-52},{opacity:1,y:0,z:-52,duration:0.55},${subAt});` : "",
+    `tl.fromTo("#${id}u",{scaleX:0,z:104},{scaleX:1,z:104,duration:0.7,ease:"power3.inOut"},${uAt});`,
     `xout("#${id}",${exitAt},${end},"${ctx.trans}");`,
   ].filter(Boolean).join("\n");
   const motif = maybeMotif(scene, ctx);
@@ -379,20 +549,20 @@ function archStat(scene, ctx) {
   const num = pickNumber(scene) || { value: 95, suffix: "%" };
   const big = dims.width >= dims.height ? 128 : 92;
   const { headAt, exitAt } = ctx.timing, end = ctx.clipEnd;
-  const html = `<div id="${id}" class="clip" data-start="${T}" data-duration="${ctx.clipDur}" data-track-index="${track}" style="opacity:0;display:flex;align-items:center;justify-content:center;">
-  <div class="kfstage" style="display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;padding:0 8%;width:100%;">
-    <div id="${id}n" style="font:800 ${big}px/1 ${cssFont(theme)};letter-spacing:-0.04em;color:${theme.accent};">0${esc(num.suffix || "")}</div>
-    <div class="kfhead" style="font:700 ${Math.round(big * 0.26)}px/1.15 ${cssFont(theme)};color:${theme.ink};max-width:18ch;"><style>#${id} .kfacc{color:${theme.accent2};}</style>${headlineSpans(scene.headline, scene.emphasis, theme)}</div>
+  const html = `<div id="${id}" class="clip" data-start="${T}" data-duration="${ctx.clipDur}" data-track-index="${track}" style="opacity:0;display:flex;align-items:center;justify-content:center;perspective:1400px;">
+  <div class="kfstage" style="display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;padding:0 8%;width:100%;transform-style:preserve-3d;">
+    <div id="${id}n" style="font:800 ${big}px/1 ${cssFont(theme)};letter-spacing:-0.04em;color:${theme.accent};transform:translateZ(74px);">0${esc(num.suffix || "")}</div>
+    <div class="kfhead" style="font:700 ${Math.round(big * 0.26)}px/1.15 ${cssHead(theme)};color:${theme.ink};max-width:18ch;"><style>#${id} .kfacc{color:${theme.accent2};}</style>${headlineSpans(scene.headline, scene.emphasis, theme)}</div>
     ${scene.subtext ? `<div id="${id}s" style="opacity:0;font:500 ${Math.round(big * 0.18)}px/1.4 ${cssFont(theme)};color:${theme.dim};max-width:40ch;">${esc(scene.subtext)}</div>` : ""}
   </div>
 </div>`;
   const fmt = num.suffix === "%" ? `function(v){return v+"%";}` : (num.prefix ? `function(v){return ${JSON.stringify(num.prefix)}+v.toLocaleString();}` : `function(v){return v.toLocaleString()+${JSON.stringify(num.suffix || "")};}`);
   const s = [
     `tl.set("#${id}",{opacity:1},${T});`,
-    `cam("#${id} .kfstage",${T},${r(ctx.clipDur)},1.0,1.08,"50% 50%");`,
+    `cam3Dz("#${id} .kfstage",${T},${r(ctx.clipDur)},1.0,1.08,"50% 50%");`,
     `countUp("${id}n",${num.value},${r(headAt)},${r(Math.min(1.6, L - 1))},${fmt});`,
     `reveal("${id}",${r(headAt + 0.15)},"${ctx.mode}",0.07);`,
-    scene.subtext ? `tl.fromTo("#${id}s",{opacity:0,y:16},{opacity:1,y:0,duration:0.5},${r(headAt + 0.6)});` : "",
+    scene.subtext ? `tl.fromTo("#${id}s",{opacity:0,y:16,z:-46},{opacity:1,y:0,z:-46,duration:0.5},${r(headAt + 0.6)});` : "",
     `xout("#${id}",${exitAt},${end},"${ctx.trans}");`,
   ].filter(Boolean).join("\n");
   return { html, script: s };
@@ -404,10 +574,10 @@ function archCta(scene, ctx) {
   const btnBg = theme.gradients ? `linear-gradient(180deg,${theme.accent2 || theme.accent},${theme.accent})` : theme.accent;
   const btnInk = lum(theme.accent) > 150 ? "#15140F" : "#FFFFFF";
   const accentText = theme.gradients ? `background:linear-gradient(100deg,${theme.accent},${theme.accent2});-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:${theme.accent};` : `color:${theme.accent};`;
-  const html = `<div id="${id}" class="clip" data-start="${T}" data-duration="${ctx.clipDur}" data-track-index="${track}" style="opacity:0;">
+  const html = `<div id="${id}" class="clip" data-start="${T}" data-duration="${ctx.clipDur}" data-track-index="${track}" style="opacity:0;perspective:1400px;">
   ${theme.gradients ? `<div id="${id}g" class="clip" data-layout-allow-occlusion style="position:absolute;left:50%;top:46%;width:46%;height:60%;transform:translate(-50%,-50%);border-radius:50%;filter:blur(54px);background:radial-gradient(circle,${rgba(theme.accent, 0.30)},transparent 66%);"></div>` : ""}
-  <div id="${id}c" style="position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;align-items:center;gap:24px;text-align:center;padding:0 8%;">
-    <h2 class="kfhead" style="font:800 ${big}px/1.02 ${cssFont(theme)};letter-spacing:-0.02em;color:${theme.ink};max-width:16ch;"><style>#${id} .kfacc{${accentText}}</style>${headlineSpans(scene.headline, scene.emphasis, theme)}</h2>
+  <div id="${id}c" style="position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);transform-style:preserve-3d;display:flex;flex-direction:column;align-items:center;gap:24px;text-align:center;padding:0 8%;">
+    <h2 class="kfhead" style="font:800 ${big}px/1.02 ${cssHead(theme)};letter-spacing:-0.02em;color:${theme.ink};max-width:16ch;"><style>#${id} .kfacc{${accentText}}</style>${headlineSpans(scene.headline, scene.emphasis, theme)}</h2>
     ${scene.subtext ? `<div id="${id}b" style="opacity:0;display:inline-flex;align-items:center;gap:11px;padding:16px 36px;border-radius:9999px;background:${btnBg};color:${btnInk};font:800 ${Math.round(big * 0.34)}px/1 ${cssFont(theme)};">${esc(scene.subtext)} <span style="width:11px;height:11px;border-right:3px solid ${btnInk};border-top:3px solid ${btnInk};transform:rotate(45deg);display:inline-block;"></span></div>` : ""}
   </div>
 </div>`;
@@ -415,10 +585,12 @@ function archCta(scene, ctx) {
   const gAt = r(Math.max(T + 0.05, headAt - 0.2)), btnAt = r(headAt + 0.6), pulseAt = r(headAt + 1.2);
   const s = [
     `tl.set("#${id}",{opacity:1},${T});`,
-    `cam("#${id}c",${T},${r(ctx.clipDur)},1.07,1.0,"50% 50%");`,
+    // Depth planes: button floats forward on Z, headline anchors at z:0 (translateY(-50%)
+    // centering on #idc is preserved — cam3Dz never touches `y`).
+    `cam3Dz("#${id}c",${T},${r(ctx.clipDur)},1.07,1.0,"50% 50%");`,
     theme.gradients ? `tl.fromTo("#${id}g",{opacity:0,scale:0.85},{opacity:1,scale:1,duration:0.8},${gAt});` : "",
     `reveal("${id}",${headAt},"${ctx.mode}",0.08);`,
-    scene.subtext ? `tl.fromTo("#${id}b",{opacity:0,scale:0.85,y:16},{opacity:1,scale:1,y:0,duration:0.6,ease:"back.out(1.7)"},${btnAt});` : "",
+    scene.subtext ? `tl.fromTo("#${id}b",{opacity:0,scale:0.85,y:16,z:80},{opacity:1,scale:1,y:0,z:80,duration:0.6,ease:"back.out(1.7)"},${btnAt});` : "",
     scene.subtext ? `tl.to("#${id}b",{scale:1.04,duration:0.8,ease:"sine.inOut",yoyo:true,repeat:sreps(${r(L - 1)},1.6)},${pulseAt});` : "",
     // last scene: trans="none" → xout holds to D; otherwise the authored transition.
     `xout("#${id}",${exitAt},${end},"${ctx.trans}");`,
@@ -439,10 +611,10 @@ function archText(scene, ctx) {
   const accentText = theme.gradients ? `background:linear-gradient(100deg,${theme.accent},${theme.accent2});-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:${theme.accent};` : `color:${theme.accent};`;
   const bullets = Array.isArray(scene.bullets) ? scene.bullets.filter(Boolean).slice(0, 3) : [];
   const camOrg = ctx.layout === "fullbleed" ? "50% 100%" : (place.split ? "0% 50%" : "50% 50%");
-  const html = `<div id="${id}" class="clip" data-start="${T}" data-duration="${ctx.clipDur}" data-track-index="${track}" style="opacity:0;">
-  <div id="${id}c" style="${place.box}${center ? "text-align:center;" : ""}">
+  const html = `<div id="${id}" class="clip" data-start="${T}" data-duration="${ctx.clipDur}" data-track-index="${track}" style="opacity:0;perspective:1400px;">
+  <div id="${id}c" style="${place.box}${center ? "text-align:center;" : ""}transform-style:preserve-3d;">
     <div id="${id}u" style="width:54px;height:5px;border-radius:3px;background:linear-gradient(90deg,${theme.accent},${theme.accent2});margin-bottom:22px;transform:scaleX(0);transform-origin:left center;${center ? "margin-left:auto;margin-right:auto;" : ""}"></div>
-    <h2 class="kfhead" style="font:800 ${big}px/1.05 ${cssFont(theme)};letter-spacing:-0.02em;color:${theme.ink};max-width:20ch;${ctr}"><style>#${id} .kfacc{${accentText}}</style>${headlineSpans(scene.headline, scene.emphasis, theme)}</h2>
+    <h2 class="kfhead" style="font:800 ${big}px/1.05 ${cssHead(theme)};letter-spacing:-0.02em;color:${theme.ink};max-width:20ch;${ctr}"><style>#${id} .kfacc{${accentText}}</style>${headlineSpans(scene.headline, scene.emphasis, theme)}</h2>
     ${scene.subtext ? `<p id="${id}s" style="opacity:0;margin-top:14px;font:500 ${Math.round(big * 0.36)}px/1.45 ${cssFont(theme)};color:${theme.dim};max-width:44ch;${ctr}">${esc(scene.subtext)}</p>` : ""}
     ${bullets.length ? `<div id="${id}bl" style="margin-top:20px;display:flex;flex-direction:column;gap:10px;${center ? "align-items:center;" : ""}">${bullets.map((b) => `<div class="kfbl" style="opacity:0;display:flex;align-items:center;gap:12px;font:600 ${Math.round(big * 0.3)}px/1.2 ${cssFont(theme)};color:${theme.ink};"><span style="width:9px;height:9px;border-radius:2px;background:${theme.accent};"></span>${esc(b)}</div>`).join("")}</div>` : ""}
   </div>
@@ -451,11 +623,12 @@ function archText(scene, ctx) {
   const uAt = r(Math.max(T + 0.05, headAt - 0.2)), subAt = r(headAt + 0.55), blAt = r(headAt + 0.7);
   const s = [
     `tl.set("#${id}",{opacity:1},${T});`,
-    `cam("#${id}c",${T},${r(ctx.clipDur)},1.0,1.05,"${camOrg}");`,
-    `tl.fromTo("#${id}u",{scaleX:0},{scaleX:1,duration:0.5,ease:"power3.inOut"},${uAt});`,
+    // Depth planes: rule floats forward, sub + bullets recede, headline anchors at z:0.
+    `cam3Dz("#${id}c",${T},${r(ctx.clipDur)},1.0,1.05,"${camOrg}");`,
+    `tl.fromTo("#${id}u",{scaleX:0,z:100},{scaleX:1,z:100,duration:0.5,ease:"power3.inOut"},${uAt});`,
     `reveal("${id}",${headAt},"${ctx.mode}",0.07);`,
-    scene.subtext ? `tl.fromTo("#${id}s",{opacity:0,y:18},{opacity:1,y:0,duration:0.5},${subAt});` : "",
-    bullets.length ? `tl.fromTo("#${id} .kfbl",{opacity:0,x:-18},{opacity:1,x:0,duration:0.45,stagger:0.12,ease:"power2.out"},${blAt});` : "",
+    scene.subtext ? `tl.fromTo("#${id}s",{opacity:0,y:18,z:-48},{opacity:1,y:0,z:-48,duration:0.5},${subAt});` : "",
+    bullets.length ? `tl.fromTo("#${id} .kfbl",{opacity:0,x:-18,z:-26},{opacity:1,x:0,z:-26,duration:0.45,stagger:0.12,ease:"power2.out"},${blAt});` : "",
     `xout("#${id}",${exitAt},${end},"${ctx.trans}");`,
   ].filter(Boolean).join("\n");
   // Bullets already fill the frame; a motif is for the bare headline+sub case.
@@ -467,14 +640,13 @@ function archText(scene, ctx) {
 // website screenshots (device-framed hero), vectors/illustrations (drawn-in side
 // art or grids), and photos (scrimmed full-bleed). Paths are relative to jobDir.
 function partitionAssets(assets) {
-  const screenshots = [], vectors = [], photos = [];
+  const screenshots = [], vectors = [], photos = [], videos = [];
   const seen = new Set();
   for (const a of (assets || [])) {
     if (!a || !a.path) continue;
-    // Skip VIDEO assets — the kit renders <img> only, so a video file in an <img>
-    // is a broken frame. Drop it (a clean image-based render beats a broken tile;
-    // proper <video> b-roll is a future enhancement). Detect by type or extension.
-    if (a.type === "video" || /\.(mp4|webm|mov|m4v)(\?|$)/i.test(a.path)) continue;
+    // VIDEO assets go to their OWN pool — HyperFrames renders <video> natively (Phase C),
+    // so they become MOVING b-roll backgrounds behind text (real motion, not a slideshow).
+    if (a.type === "video" || /\.(mp4|webm|mov|m4v)(\?|$)/i.test(a.path)) { videos.push(a); continue; }
     // DE-DUPLICATE. Stock can be fetched for several needs and saved as 3.jpg/4.jpg
     // (distinct paths, IDENTICAL picture) — dedup THAT by sourceUrl. But real FILE
     // assets (site screenshots, scraped page images, user uploads) are each a DISTINCT
@@ -491,7 +663,7 @@ function partitionAssets(assets) {
     else if (/\.svg($|\?)/i.test(a.path) || /vector|illustration|icon|line.?art|graphic|\blogo\b/.test(s)) vectors.push(a);
     else photos.push(a);
   }
-  return { screenshots, vectors, photos };
+  return { screenshots, vectors, photos, videos };
 }
 
 // SCREENSHOT-HERO — the user's real website screenshot in a per-pack device frame
@@ -509,21 +681,21 @@ function archScreenshotHero(scene, ctx) {
   const big = land ? 56 : 46;
   const accentText = theme.gradients ? `background:linear-gradient(100deg,${theme.accent},${theme.accent2});-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:${theme.accent};` : `color:${theme.accent};`;
   const dots = ["#FF5F57", "#FEBC2E", "#28C840"].map((c) => `<span style="width:11px;height:11px;border-radius:50%;background:${flat ? theme.ink : c};display:inline-block;"></span>`).join("");
-  const frameW = land ? "52%" : "84%";
-  const frameWrap = land
-    ? `position:absolute;left:5%;top:50%;transform:translateY(-50%);width:${frameW};`
-    : `position:absolute;left:8%;right:8%;top:8%;width:84%;`;
-  const copyWrap = land
-    ? `position:absolute;right:5%;top:50%;transform:translateY(-50%);width:34%;`
-    : `position:absolute;left:8%;right:8%;bottom:8%;width:84%;text-align:center;`;
-  const html = `<div id="${id}" class="clip" data-start="${T}" data-duration="${ctx.clipDur}" data-track-index="${track}" style="opacity:0;">
-  <div id="${id}fr" class="kfstage" style="${frameWrap}${chrome}overflow:hidden;">
+  // Flexbox centering (NOT top:50%+translateY): the frame is GSAP-animated (yPercent/
+  // rotationX), and a CSS translateY(-50%) would be OVERWRITTEN by GSAP's transform —
+  // that dropped the -50% and pushed the frame off the bottom of the video. Flex keeps it
+  // dead-centre regardless, and GSAP's yPercent then reads as a small offset from centre.
+  // Frame height is bounded to ≤56% so the whole device + chrome always fits, centred.
+  const dir = land ? "row" : "column";
+  const shotH = land ? Math.round(dims.height * 0.56) : Math.round(dims.height * 0.4);
+  const html = `<div id="${id}" class="clip" data-start="${T}" data-duration="${ctx.clipDur}" data-track-index="${track}" style="opacity:0;display:flex;flex-direction:${dir};align-items:center;justify-content:center;gap:${land ? 46 : 22}px;padding:0 6%;">
+  <div id="${id}fr" style="${chrome}overflow:hidden;flex-shrink:0;width:${land ? "56%" : "86%"};">
     <div style="height:42px;display:flex;align-items:center;gap:9px;padding:0 16px;background:${barBg};border-bottom:1px solid ${theme.line};">${dots}<span style="margin-left:12px;flex:1;max-width:340px;height:22px;border-radius:9999px;background:${rgba(theme.ink, 0.08)};"></span></div>
-    <div style="position:relative;width:100%;height:${land ? Math.round(dims.height * 0.62) : Math.round(dims.height * 0.42)}px;overflow:hidden;"><img id="${id}img" src="${esc(asset.path)}" alt="${esc(asset.alt || "screenshot")}" style="position:absolute;top:0;left:0;width:100%;height:auto;min-height:100%;object-fit:cover;object-position:top center;"></div>
+    <div style="position:relative;width:100%;height:${shotH}px;overflow:hidden;"><img id="${id}img" src="${esc(asset.path)}" alt="${esc(asset.alt || "screenshot")}" style="position:absolute;top:0;left:0;width:100%;height:auto;min-height:100%;object-fit:cover;object-position:top center;"></div>
   </div>
-  <div style="${copyWrap}">
+  <div style="${land ? "flex:1;" : "width:86%;text-align:center;"}">
     <span id="${id}k" style="opacity:0;display:inline-flex;align-items:center;gap:9px;padding:7px 15px;border-radius:9999px;background:${theme.panel};border:1px solid ${theme.line};color:${theme.accent};font:700 13px/1 ${cssFont(theme)};letter-spacing:.2em;text-transform:uppercase;"><span style="width:7px;height:7px;border-radius:50%;background:${theme.accent};"></span>${esc(ctx.kicker || "Live")}</span>
-    <h2 class="kfhead" style="margin-top:14px;font:800 ${big}px/1.05 ${cssFont(theme)};letter-spacing:-0.02em;color:${theme.ink};"><style>#${id} .kfacc{${accentText}}</style>${headlineSpans(scene.headline, scene.emphasis, theme)}</h2>
+    <h2 class="kfhead" style="margin-top:14px;font:800 ${big}px/1.05 ${cssHead(theme)};letter-spacing:-0.02em;color:${theme.ink};"><style>#${id} .kfacc{${accentText}}</style>${headlineSpans(scene.headline, scene.emphasis, theme)}</h2>
     ${scene.subtext ? `<p id="${id}s" style="opacity:0;margin-top:13px;font:500 ${Math.round(big * 0.42)}px/1.45 ${cssFont(theme)};color:${theme.dim};">${esc(scene.subtext)}</p>` : ""}
   </div>
 </div>`;
@@ -554,7 +726,7 @@ function archSplitVector(scene, ctx) {
   <div class="kfstage" style="display:flex;flex-direction:${dir};align-items:center;gap:${land ? 56 : 28}px;width:100%;padding:0 7%;">
     <div style="flex:1;">
       <div id="${id}u" style="width:54px;height:5px;border-radius:3px;background:linear-gradient(90deg,${theme.accent},${theme.accent2});margin-bottom:20px;transform:scaleX(0);transform-origin:left center;"></div>
-      <h2 class="kfhead" style="font:800 ${big}px/1.05 ${cssFont(theme)};letter-spacing:-0.02em;color:${theme.ink};"><style>#${id} .kfacc{${accentText}}</style>${headlineSpans(scene.headline, scene.emphasis, theme)}</h2>
+      <h2 class="kfhead" style="font:800 ${big}px/1.05 ${cssHead(theme)};letter-spacing:-0.02em;color:${theme.ink};"><style>#${id} .kfacc{${accentText}}</style>${headlineSpans(scene.headline, scene.emphasis, theme)}</h2>
       ${scene.subtext ? `<p id="${id}s" style="opacity:0;margin-top:14px;font:500 ${Math.round(big * 0.4)}px/1.45 ${cssFont(theme)};color:${theme.dim};">${esc(scene.subtext)}</p>` : ""}
     </div>
     <div style="flex:1;display:flex;align-items:center;justify-content:center;"><img id="${id}art" src="${esc(asset.path)}" alt="${esc(asset.alt || "")}" style="width:100%;max-width:${land ? "44%" : "60%"};height:auto;max-height:${Math.round(dims.height * (land ? 0.6 : 0.34))}px;object-fit:contain;${artGlow}"></div>
@@ -569,6 +741,85 @@ function archSplitVector(scene, ctx) {
     scene.subtext ? `tl.fromTo("#${id}s",{opacity:0,y:16},{opacity:1,y:0,duration:0.5},${subAt});` : "",
     `tl.fromTo("#${id}art",{opacity:0,scale:0.82,y:24},{opacity:1,scale:1,y:0,duration:0.7,ease:"back.out(1.5)"},${artAt});`,
     `tl.to("#${id}art",{y:"-=14",duration:1.6,ease:"sine.inOut",yoyo:true,repeat:sreps(${r(L - 0.8)},1.6)},${r(headAt + 0.8)});`,
+    `xout("#${id}",${exitAt},${end},"${ctx.trans}");`,
+  ].filter(Boolean).join("\n");
+  return { html, script: s };
+}
+
+// LOGO REVEAL — a brand logo that BUILDS ON: an accent halo expands behind the mark
+// while it scales + settles in (back.out), then the tagline reveals and the mark keeps
+// a gentle float. For user-uploaded logos (transparent PNGs) — contained + padded,
+// never stretched. The signature brand beat, coloured by the pack + brand accent.
+function archLogoReveal(scene, ctx) {
+  const { theme, id, T, L, track, dims, asset } = ctx;
+  const land = dims.width >= dims.height;
+  const big = land ? 42 : 34;
+  const logoMax = Math.round(dims.height * (land ? 0.32 : 0.24));
+  const accentText = theme.gradients ? `background:linear-gradient(100deg,${theme.accent},${theme.accent2});-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:${theme.accent};` : `color:${theme.accent};`;
+  const halo = theme.gradients
+    ? `<div id="${id}halo" style="position:absolute;left:50%;top:50%;width:${Math.round(logoMax * 2.1)}px;height:${Math.round(logoMax * 2.1)}px;transform:translate(-50%,-50%);border-radius:50%;background:radial-gradient(circle,${rgba(theme.accent, 0.32)},transparent 64%);filter:blur(26px);opacity:0;"></div>`
+    : "";
+  const html = `<div id="${id}" class="clip" data-start="${T}" data-duration="${ctx.clipDur}" data-track-index="${track}" style="opacity:0;display:flex;align-items:center;justify-content:center;">
+  <div class="kfstage" style="display:flex;flex-direction:column;align-items:center;gap:${land ? 24 : 18}px;width:100%;padding:0 8%;text-align:center;">
+    <div style="position:relative;display:flex;align-items:center;justify-content:center;min-height:${logoMax}px;">
+      ${halo}
+      <img id="${id}logo" src="${esc(asset.path)}" alt="${esc(asset.alt || "logo")}" style="position:relative;width:auto;max-width:${land ? "48%" : "66%"};max-height:${logoMax}px;height:auto;object-fit:contain;">
+    </div>
+    ${scene.headline ? `<h2 class="kfhead" style="font:800 ${big}px/1.08 ${cssHead(theme)};letter-spacing:-0.02em;color:${theme.ink};"><style>#${id} .kfacc{${accentText}}</style>${headlineSpans(scene.headline, scene.emphasis, theme)}</h2>` : ""}
+    ${scene.subtext ? `<p id="${id}s" style="opacity:0;font:500 ${Math.round(big * 0.5)}px/1.4 ${cssFont(theme)};color:${theme.dim};">${esc(scene.subtext)}</p>` : ""}
+  </div>
+</div>`;
+  const { headAt, exitAt } = ctx.timing, end = ctx.clipEnd;
+  const logoAt = r(Math.max(T + 0.05, headAt - 0.45)), subAt = r(headAt + 0.4);
+  const s = [
+    `tl.set("#${id}",{opacity:1},${T});`,
+    halo ? `tl.fromTo("#${id}halo",{opacity:0,scale:0.4},{opacity:1,scale:1,duration:0.8,ease:"power2.out"},${logoAt});` : "",
+    `tl.fromTo("#${id}logo",{opacity:0,scale:0.62,y:12,filter:"blur(6px)"},{opacity:1,scale:1,y:0,filter:"blur(0px)",duration:0.8,ease:"back.out(1.6)"},${logoAt});`,
+    scene.headline ? `reveal("${id}",${headAt},"${ctx.mode}",0.07);` : "",
+    scene.subtext ? `tl.fromTo("#${id}s",{opacity:0,y:12},{opacity:1,y:0,duration:0.5},${subAt});` : "",
+    `tl.to("#${id}logo",{y:"-=8",duration:1.8,ease:"sine.inOut",yoyo:true,repeat:sreps(${r(L - 0.9)},1.8)},${r(logoAt + 0.9)});`,
+    `xout("#${id}",${exitAt},${end},"${ctx.trans}");`,
+  ].filter(Boolean).join("\n");
+  return { html, script: s };
+}
+
+// PRODUCT REVEAL — the product image pushes IN (scale 1.14→1.0 + rise) with a soft
+// drop shadow and an accent glow that drifts opposite (parallax depth), headline on the
+// other side. A cinematic product beat, not a static inset.
+function archProductReveal(scene, ctx) {
+  const { theme, id, T, L, track, dims, asset } = ctx;
+  const land = dims.width >= dims.height;
+  const big = land ? 60 : 48;
+  const dir = land ? "row" : "column";
+  const accentText = theme.gradients ? `background:linear-gradient(100deg,${theme.accent},${theme.accent2});-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:${theme.accent};` : `color:${theme.accent};`;
+  const prodGlow = theme.gradients ? `filter:drop-shadow(0 34px 60px rgba(0,0,0,0.55)) drop-shadow(0 8px 26px ${rgba(theme.accent, 0.28)});` : "";
+  const bgGlow = theme.gradients
+    ? `<div id="${id}g" style="position:absolute;left:${land ? "72%" : "50%"};top:50%;width:46%;height:72%;transform:translate(-50%,-50%);border-radius:50%;background:radial-gradient(circle,${rgba(theme.accent, 0.22)},transparent 68%);filter:blur(46px);opacity:0;"></div>`
+    : "";
+  const html = `<div id="${id}" class="clip" data-start="${T}" data-duration="${ctx.clipDur}" data-track-index="${track}" style="opacity:0;display:flex;align-items:center;justify-content:center;">
+  ${bgGlow}
+  <div class="kfstage" style="display:flex;flex-direction:${dir};align-items:center;gap:${land ? 52 : 24}px;width:100%;padding:0 7%;">
+    <div style="flex:1;">
+      <div id="${id}u" style="width:54px;height:5px;border-radius:3px;background:linear-gradient(90deg,${theme.accent},${theme.accent2});margin-bottom:20px;transform:scaleX(0);transform-origin:left center;"></div>
+      <h2 class="kfhead" style="font:800 ${big}px/1.05 ${cssHead(theme)};letter-spacing:-0.02em;color:${theme.ink};"><style>#${id} .kfacc{${accentText}}</style>${headlineSpans(scene.headline, scene.emphasis, theme)}</h2>
+      ${scene.subtext ? `<p id="${id}s" style="opacity:0;margin-top:14px;font:500 ${Math.round(big * 0.4)}px/1.45 ${cssFont(theme)};color:${theme.dim};">${esc(scene.subtext)}</p>` : ""}
+    </div>
+    <div style="flex:1;display:flex;align-items:center;justify-content:center;"><img id="${id}img" src="${esc(asset.path)}" alt="${esc(asset.alt || "product")}" style="width:100%;max-width:${land ? "54%" : "72%"};height:auto;max-height:${Math.round(dims.height * (land ? 0.66 : 0.42))}px;object-fit:contain;${prodGlow}"></div>
+  </div>
+</div>`;
+  const { headAt, exitAt } = ctx.timing, end = ctx.clipEnd;
+  const uAt = r(Math.max(T + 0.05, headAt - 0.2)), imgAt = r(Math.max(T + 0.05, headAt - 0.3)), subAt = r(headAt + 0.5);
+  const parAt = r(imgAt + 1.0); // parallax drift starts AFTER the push-in (no tween overlap)
+  const s = [
+    `tl.set("#${id}",{opacity:1},${T});`,
+    bgGlow ? `tl.fromTo("#${id}g",{opacity:0,scale:0.8},{opacity:1,scale:1,duration:0.9,ease:"power2.out"},${imgAt});` : "",
+    `tl.fromTo("#${id}u",{scaleX:0},{scaleX:1,duration:0.5,ease:"power3.inOut"},${uAt});`,
+    `reveal("${id}",${headAt},"${ctx.mode}",0.07);`,
+    scene.subtext ? `tl.fromTo("#${id}s",{opacity:0,y:16},{opacity:1,y:0,duration:0.5},${subAt});` : "",
+    `tl.fromTo("#${id}img",{opacity:0,scale:1.14,y:30},{opacity:1,scale:1,y:0,duration:0.9,ease:"expo.out"},${imgAt});`,
+    // parallax depth: product drifts up while the glow drifts down (different planes)
+    L - 1.2 > 0.5 ? `tl.to("#${id}img",{y:"-=16",duration:${r(L - 1.2)},ease:"sine.inOut"},${parAt});` : "",
+    (bgGlow && L - 1.2 > 0.5) ? `tl.to("#${id}g",{yPercent:8,duration:${r(L - 1.2)},ease:"sine.inOut"},${parAt});` : "",
     `xout("#${id}",${exitAt},${end},"${ctx.trans}");`,
   ].filter(Boolean).join("\n");
   return { html, script: s };
@@ -606,7 +857,7 @@ function archAssetMontage(scene, ctx) {
   const html = `<div id="${id}" class="clip" data-start="${T}" data-duration="${ctx.clipDur}" data-track-index="${track}" style="opacity:0;">
   <div style="position:absolute;left:6%;right:6%;top:50%;transform:translateY(-50%);">
     <div id="${id}u" style="width:54px;height:5px;border-radius:3px;background:linear-gradient(90deg,${theme.accent},${theme.accent2});margin-bottom:18px;transform:scaleX(0);transform-origin:left center;"></div>
-    <h2 class="kfhead" style="font:800 ${big}px/1.05 ${cssFont(theme)};letter-spacing:-0.02em;color:${theme.ink};max-width:22ch;"><style>#${id} .kfacc{${accentText}}</style>${headlineSpans(scene.headline, scene.emphasis, theme)}</h2>
+    <h2 class="kfhead" style="font:800 ${big}px/1.05 ${cssHead(theme)};letter-spacing:-0.02em;color:${theme.ink};max-width:22ch;"><style>#${id} .kfacc{${accentText}}</style>${headlineSpans(scene.headline, scene.emphasis, theme)}</h2>
     <div id="${id}g" style="margin-top:22px;display:grid;grid-template-columns:repeat(${cols},1fr);gap:${land ? 18 : 12}px;">${tiles}</div>
   </div>
 </div>`;
@@ -654,6 +905,29 @@ function scrimBg(asset, ctx) {
     `tl.fromTo("#${id}bgi",{scale:${kb.from},xPercent:0,yPercent:0},{scale:${kb.to},xPercent:${kb.dx},yPercent:${kb.dy},duration:${r(ctx.clipDur)},ease:"none",transformOrigin:"${kb.origin}"},${r(T)});`,
     ctx.isLast ? "" : `tl.to("#${id}bg",{opacity:0,duration:0.35,ease:"power2.in"},${r(T + L - 0.1)});`,
   ].join("\n");
+  return { html, script: s };
+}
+
+// VIDEO B-ROLL background — REAL moving footage behind a text scene (Phase C). The
+// strongest "not a slideshow" signal. HyperFrames decodes the <video> in sync with the
+// capture timeline, so the footage actually PLAYS. Contract: the <video> is the timed
+// clip (framework forces its opacity:1 while active); it lives in a NON-TIMED wrapper so
+// GSAP owns the opacity fade + a slow scale drift (Ken-Burns on motion). muted playsinline.
+function videoBg(asset, ctx) {
+  const { theme, id, T, L } = ctx;
+  if (!asset) return null;
+  const g = theme.ground;
+  // Footage is busy → a heavier, centre-weighted scrim keeps text legible over the motion.
+  const scrim = `radial-gradient(130% 100% at 50% 46%, ${rgba(g, 0.5)}, ${rgba(g, 0.8)} 74%), linear-gradient(180deg, ${rgba(g, 0.58)} 0%, ${rgba(g, 0.74)} 55%, ${rgba(g, 0.9)} 100%)`;
+  const html = `<div id="${id}bgw" style="position:absolute;inset:0;opacity:0;overflow:hidden;">`
+    + `<video id="${id}bgv" class="clip" data-start="${T}" data-duration="${ctx.clipDur}" data-track-index="${ctx.bgTrack}" data-media-start="0" data-layout-allow-occlusion src="${esc(asset.path)}" muted playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;"></video>`
+    + `${photoGrade(theme)}<div style="position:absolute;inset:0;background:${scrim};"></div></div>`;
+  const s = [
+    `tl.set("#${id}bgw",{scale:1.06},${r(T)});`,
+    `tl.fromTo("#${id}bgw",{opacity:0},{opacity:1,duration:0.6},${r(T)});`,
+    `tl.to("#${id}bgw",{scale:1.12,duration:${r(ctx.clipDur)},ease:"none"},${r(T)});`,
+    ctx.isLast ? "" : `tl.to("#${id}bgw",{opacity:0,duration:0.35,ease:"power2.in"},${r(T + L - 0.1)});`,
+  ].filter(Boolean).join("\n");
   return { html, script: s };
 }
 
@@ -759,6 +1033,9 @@ function buildComposition({ storyboard, dims, framePack, assets, captionCues } =
 
   const seed = strSeed((sb.title || "") + "|" + (framePack || ""));
   const bg = buildBackground(theme, dims, D, framePack, seed);
+  // NOTE: a Three.js/WebGL backdrop (scene_kit_3d.js) was trialled here but FROZE the whole
+  // render — the HyperFrames capture engine (0.6.120) does not drive a WebGL canvas frame-by-
+  // frame, so the timeline stalled. Left disabled; real 3D needs a different renderer (R3F/Remotion).
   const bodyHtml = [bg.html];
   const scriptLines = [emitHelpers(D), bg.script];
 
@@ -791,10 +1068,12 @@ function buildComposition({ storyboard, dims, framePack, assets, captionCues } =
       isLast,
       kicker: i === 0 ? (sb.title || "KEYFRAME") : "",
       asset: null, assets: null, bgAsset: null,
-      // per-scene authored intent (was previously discarded by the kit)
-      layout: layoutFor(scene, i),
+      // per-scene authored intent (was previously discarded by the kit). Decorrelated seed
+      // offsets (different "digits" of the base-997 seed) spread layout/transition rotation
+      // per VIDEO — and independently of the ambient mode — so two films don't share a rhythm.
+      layout: layoutFor(scene, i, Math.floor(seed / 4)),
       mode: revealMode(scene),
-      trans: transOut(scene, isLast),
+      trans: transOut(scene, isLast, i, Math.floor(seed / 16)),
       timing: sceneTiming(scene, T, L),
     };
     return { scene, i, ctx, isContent: i > 0 && i < scenes.length - 1, build: archetypeFor(scene, i, scenes.length) };
@@ -814,13 +1093,29 @@ function buildComposition({ storyboard, dims, framePack, assets, captionCues } =
   const canHost = (p) => p.isContent && p.build !== archTerminal
     && (p.build === archText || hasRealForeground);
 
-  // Pass 1 — foreground features on content scenes. Rotate a fresh screenshot hero,
-  // reserve one scene for a montage when the pool is deep, then split-art.
+  // A user's OWN logo / product gets a DEDICATED cinematic reveal (build-on / push-in)
+  // ahead of the generic weaving — they're the highest-value, most brand-critical assets.
+  // Pulled from whichever pool partitionAssets routed them to (logo→vectors, product→photos).
+  const isUserKind = (k) => (a) => a && a.source === "user-upload" && a.kind === k;
+
+  // Pass 1 — foreground features on content scenes. User logo/product reveals first,
+  // then a screenshot hero, a montage when the pool is deep, then split-art.
   for (const p of plan) {
     if (!canHost(p)) continue;
-    if (!usedShot && pools.screenshots.length) {
+    const prodI = pools.photos.findIndex(isUserKind("product"));
+    const logoI = pools.vectors.findIndex(isUserKind("logo"));
+    // PRIORITY for scarce content slots: product → screenshot → logo. The logo is the
+    // LOWEST-priority foreground because it ALSO shows on the persistent corner watermark
+    // (every scene), so a screenshot/product — which has no other way to appear — must win
+    // the slot. Without this, a short video (few content scenes) let the logo reveal claim
+    // the only slot and the uploaded screenshot vanished entirely.
+    if (prodI >= 0) {
+      p.ctx.asset = pools.photos.splice(prodI, 1)[0]; p.build = archProductReveal;
+    } else if (!usedShot && pools.screenshots.length) {
       p.ctx.asset = pools.screenshots.shift(); p.build = archScreenshotHero; usedShot = true;
       p.ctx.kicker = p.scene.emphasis || "Live preview";
+    } else if (logoI >= 0) {
+      p.ctx.asset = pools.vectors.splice(logoI, 1)[0]; p.build = archLogoReveal; p.ctx.kicker = "";
     } else if (!montageDone && leftover() >= 3) {
       p.ctx.assets = takeMontage(pools, 6); p.build = archAssetMontage; montageDone = true;
     } else if (pools.vectors.length) {
@@ -830,6 +1125,17 @@ function buildComposition({ storyboard, dims, framePack, assets, captionCues } =
     } else if (pools.screenshots.length) {
       p.ctx.asset = pools.screenshots.shift(); p.build = archScreenshotHero;
       p.ctx.kicker = p.scene.emphasis || "Live preview";
+    }
+  }
+
+  // Pass 1.5 — VIDEO B-ROLL backgrounds (Phase C): real moving footage behind text
+  // scenes. The strongest "not a slideshow" signal, so it runs on ANY pack (motion suits
+  // dark packs too) and takes the background slot ahead of a still image scrim. Config-gated.
+  if (config.assets?.videoBroll !== false && pools.videos && pools.videos.length) {
+    for (const p of plan) {
+      if (p.i === 0 || p.ctx.asset || p.ctx.assets || p.ctx.bgAsset) continue; // skip hook + scenes already dressed
+      if (!pools.videos.length) break;
+      p.ctx.bgAsset = pools.videos.shift(); // marked type:"video" → videoBg in Pass 3
     }
   }
 
@@ -854,15 +1160,27 @@ function buildComposition({ storyboard, dims, framePack, assets, captionCues } =
   // Pass 3 — emit each scene (its scrim background first, so it sits under the
   // content clip), in storyboard order.
   for (const p of plan) {
-    const bg = p.ctx.bgAsset ? scrimBg(p.ctx.bgAsset, p.ctx) : null;
+    const bgIsVideo = p.ctx.bgAsset && (p.ctx.bgAsset.type === "video" || /\.(mp4|webm|mov|m4v)(\?|$)/i.test(p.ctx.bgAsset.path || ""));
+    const bg = p.ctx.bgAsset ? (bgIsVideo ? videoBg(p.ctx.bgAsset, p.ctx) : scrimBg(p.ctx.bgAsset, p.ctx)) : null;
     const out = p.build(p.scene, p.ctx);
-    const tag = p.ctx.assets ? " +montage" : p.ctx.asset ? " +asset" : p.ctx.bgAsset ? " +bg" : "";
+    const tag = p.ctx.assets ? " +montage" : p.ctx.asset ? " +asset" : p.ctx.bgAsset ? (bgIsVideo ? " +videobg" : " +bg") : "";
     bodyHtml.push(`<!-- s${p.i + 1} ${p.scene.kind || ""}${tag} [${p.ctx.T}–${r(p.ctx.T + p.ctx.L)}] -->`);
     if (bg) bodyHtml.push(bg.html);
     bodyHtml.push(out.html);
     scriptLines.push(`// s${p.i + 1}`);
     if (bg) scriptLines.push(bg.script);
     scriptLines.push(out.script);
+  }
+
+  // PERSISTENT BRAND WATERMARK — a small user logo pinned top-left across the WHOLE
+  // film for brand continuity (a real logo-reveal scene still gets the big build-on).
+  // Subtle (62% opacity), its own high track, occlusion-allowed since it sits over content.
+  const brandLogoPath = (assets || []).find((a) => a && a.source === "user-upload" && a.kind === "logo")?.path || null;
+  if (brandLogoPath) {
+    const wmH = Math.round(dims.height * 0.06);
+    bodyHtml.push(`<!-- persistent brand watermark -->`,
+      `<div id="kfwm" class="clip" data-start="0" data-duration="${D}" data-track-index="912" data-layout-allow-occlusion style="position:absolute;left:4%;top:5%;opacity:0;"><img src="${esc(brandLogoPath)}" alt="" style="height:${wmH}px;width:auto;max-width:200px;object-fit:contain;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.45));"></div>`);
+    scriptLines.push(`tl.fromTo("#kfwm",{opacity:0,y:-6},{opacity:0.62,y:0,duration:0.7,ease:"power2.out"},0.4);`);
   }
 
   // FILMIC OVERLAY — the pack's foremost layer (vignette + film grain), above scene
@@ -883,6 +1201,9 @@ function buildComposition({ storyboard, dims, framePack, assets, captionCues } =
     `<!DOCTYPE html>`, `<html>`, `<head>`, `<meta charset="utf-8">`, `<title>vid</title>`,
     `<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>`,
     `<style>`,
+    // Embed the pack's DISPLAY face (data-URI @font-face) so headlines render in the
+    // pack's real typographic identity instead of falling back to Inter.
+    fontFaceCss(theme.displayFace),
     `* { margin:0; padding:0; box-sizing:border-box; }`,
     `body { font-family:${theme.fontStack}; }`,
     `#root { position:relative; overflow:hidden; background:${theme.ground}; }`,

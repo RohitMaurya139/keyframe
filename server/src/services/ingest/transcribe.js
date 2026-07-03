@@ -12,7 +12,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
 const config = require("../../config");
-const openrouter = require("../openrouter");
+const llm = require("../llm");
 
 const WINDOWS = process.platform === "win32";
 
@@ -103,7 +103,7 @@ async function describeVisualStyle(framePaths, { signal } = {}) {
       image_url: { url: `data:image/jpeg;base64,${fs.readFileSync(p).toString("base64")}` },
     })),
   ];
-  const { text, tokensIn, tokensOut } = await openrouter.chat({
+  const { text, tokensIn, tokensOut } = await llm.chat({
     system: "You are a senior motion-design director with a precise eye.",
     user: content,
     stage: "vision",

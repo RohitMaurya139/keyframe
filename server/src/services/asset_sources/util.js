@@ -92,4 +92,18 @@ function reencodeForHyperframes(srcPath) {
   });
 }
 
-module.exports = { download, validateMedia, reencodeForHyperframes, UA };
+// Grab one frame from a video as a JPG (for vision-gating stock b-roll — you can't
+// check a video URL directly, so we sample a frame and vet THAT). Resolves true on success.
+function extractFrame(videoPath, outPath, atSec = 0.6) {
+  return new Promise((resolve) => {
+    const p = spawn("ffmpeg", [
+      "-y", "-hide_banner", "-loglevel", "error", "-ss", String(atSec), "-i", videoPath,
+      "-frames:v", "1", "-q:v", "4", outPath,
+    ]);
+    const timer = setTimeout(() => { try { p.kill("SIGKILL"); } catch { /* noop */ } resolve(false); }, 20_000);
+    p.on("error", () => { clearTimeout(timer); resolve(false); });
+    p.on("exit", (code) => { clearTimeout(timer); resolve(code === 0 && fs.existsSync(outPath)); });
+  });
+}
+
+module.exports = { download, validateMedia, reencodeForHyperframes, extractFrame, UA };

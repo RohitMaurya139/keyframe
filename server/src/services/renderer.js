@@ -172,9 +172,16 @@ async function render({ jobId, jobDir, durationSec, quality = config.server.rend
     );
   }
 
-  const srcPath = path.join(jobDir, outRelative);
+  return publishRenderedMp4({ jobId, jobDir, durationSec });
+}
+
+// Move jobDir/renders/out.mp4 → public/videos/<jobId>.mp4 (+ thumbnail) and return the
+// canonical { videoPath, videoUrl }. Shared by the HyperFrames renderer and the Three.js
+// (Remotion) renderer so both publish identically and downstream (audio mux, DB) is unchanged.
+function publishRenderedMp4({ jobId, jobDir, durationSec }) {
+  const srcPath = path.join(jobDir, "renders", "out.mp4");
   if (!fs.existsSync(srcPath)) {
-    throw new Error(`render reported success but ${outRelative} is missing`);
+    throw new Error(`render reported success but renders/out.mp4 is missing`);
   }
 
   fs.mkdirSync(config.paths.videosDir, { recursive: true });
@@ -197,4 +204,4 @@ async function render({ jobId, jobDir, durationSec, quality = config.server.rend
   return { videoPath: destPath, videoUrl: `/videos/${jobId}.mp4` };
 }
 
-module.exports = { render };
+module.exports = { render, publishRenderedMp4 };

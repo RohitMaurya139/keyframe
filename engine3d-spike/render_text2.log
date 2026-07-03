@@ -1,0 +1,49 @@
+Bundling 6%
+Bundling 12%
+Bundling 24%
+Bundling 46%
+Bundling 65%
+Bundling 71%
+Bundling 76%
+Bundling 81%
+Bundling 86%
+Bundling 91%
+Bundling 98%
+Bundling 100%
+Getting composition
+[90mComposition          Hook[39m
+[90mCodec                h264[39m
+[90mOutput               out/hook_text.mp4[39m
+[90mConcurrency          2x[39m
+Rendered 0/90
+[40m Tab 0, node_modules/its-fine/dist/index.js:64 [49m [31m[0mTypeError: (0 , drei_namespaceObject.preloadFont) is not a function[0m[39m
+[31m[0m    at http://localhost:3000/bundle.js:81825:41[0m[39m
+[31m[0m    at Qj (http://localhost:3000/bundle.js:82447:332)[0m[39m
+[31m[0m    at Hk (http://localhost:3000/bundle.js:82489:111)[0m[39m
+[31m[0m    at http://localhost:3000/bundle.js:82485:391[0m[39m
+[31m[0m    at J (http://localhost:3000/bundle.js:82600:203)[0m[39m
+[31m[0m    at MessagePort.R (http://localhost:3000/bundle.js:82601:128)[0m[39m
+[40m Tab 1, node_modules/its-fine/dist/index.js:64 [49m [31m[0mTypeError: (0 , drei_namespaceObject.preloadFont) is not a function[0m[39m
+[31m[0m    at http://localhost:3000/bundle.js:81825:41[0m[39m
+[31m[0m    at Qj (http://localhost:3000/bundle.js:82447:332)[0m[39m
+[31m[0m    at Hk (http://localhost:3000/bundle.js:82489:111)[0m[39m
+[31m[0m    at http://localhost:3000/bundle.js:82485:391[0m[39m
+[31m[0m    at J (http://localhost:3000/bundle.js:82600:203)[0m[39m
+[31m[0m    at MessagePort.R (http://localhost:3000/bundle.js:82601:128)[0m[39m
+
+[31mAn error occurred while rendering frame 0:[39m
+[31m[41m[37m TypeError [39m[31m[49m[39m [31m(0 , drei_namespaceObject.preloadFont) is not a function[39m
+
+at [4msrc/HookScene.tsx:53[24m
+[90m51[39m │ [90mconst useFontReady = (characters: string) => {[39m
+[90m52[39m │ [90m  const [handle] = useState(() => delayRender("preload-font"));[39m
+53 │   useEffect(() => {
+[90m54[39m │ [90m    preloadFont({ font: FONT, characters }, () => continueRender(handle));[39m
+[90m55[39m │ [90m  }, [characters, handle]);[39m
+[90m56[39m │ [90m};[39m
+
+[90mat Qj [94m(node_modules/react-dom/cjs/react-dom.production.min.js:242)[39m[90m[39m
+[90mat Hk [94m(node_modules/react-dom/cjs/react-dom.production.min.js:284)[39m[90m[39m
+[90mat [94m(node_modules/react-dom/cjs/react-dom.production.min.js:280)[39m[90m[39m
+[90mat J [94m(node_modules/react-dom/node_modules/scheduler/cjs/scheduler.production.min.js:12)[39m[90m[39m
+[90mat R [94m(node_modules/react-dom/node_modules/scheduler/cjs/scheduler.production.min.js:13)[39m[90m[39m

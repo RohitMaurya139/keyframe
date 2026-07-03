@@ -79,7 +79,9 @@ async function acquire({ query, fallbackQueries = [], type, orientation, outputP
   // (Previously, budget exhaustion let the NEXT candidate through unchecked, which is
   // exactly how an off-topic cache entry — the desert "old-woman" cached under a
   // "blinking cursor" query, or a race car cached under "sleek browser" — got shipped.)
-  const useVision = type === "image" && visionTopic && config.assets?.visionRelevance !== false;
+  const visionOn = !!visionTopic && config.assets?.visionRelevance !== false;
+  const useVision = type === "image" && visionOn;       // images check the URL pre-download
+  const useVideoVision = type === "video" && visionOn;  // videos check an extracted frame post-download
   const strict = config.assets?.relevanceStrict !== false; // STRICT (default): reject anything not clearly on-subject.
   const VISION_MAX = 3;
   let visionUsed = 0;
@@ -185,7 +187,25 @@ async function acquire({ query, fallbackQueries = [], type, orientation, outputP
             try { fs.unlinkSync(outputPath); } catch { /* noop */ }
             continue;
           }
-          if (type === "video") await util.reencodeForHyperframes(outputPath);
+          if (type === "video") {
+            // A stock VIDEO goes FULL-BLEED + moving (the highest-visibility slot), yet it
+            // skipped the vision gate entirely — that's how a generic "code-processing"
+            // clip landed behind an AI-platform headline. Sample a frame and vet it against
+            // the subject; off-topic → drop it BEFORE the costly reencode (→ motif fallback).
+            if (useVideoVision && visionUsed < VISION_MAX) {
+              visionUsed++;
+              const frame = outputPath + ".frame.jpg";
+              let vfits = true;
+              try { if (await util.extractFrame(outputPath, frame, 0.6)) vfits = await imageFitsTopic({ imagePath: frame, topic: visionTopic, query: q, tracker, strict }); } catch { /* fail-open */ }
+              try { fs.unlinkSync(frame); } catch { /* noop */ }
+              if (!vfits) {
+                console.log(`[assets] vision-rejected ${provider.name} VIDEO for "${q}" (off-topic for the subject)`);
+                try { fs.unlinkSync(outputPath); } catch { /* noop */ }
+                continue;
+              }
+            }
+            await util.reencodeForHyperframes(outputPath);
+          }
           localDb.register({
             filePath: outputPath, query: q, type, orientation,
             source: provider.name, license: c.license, sourceUrl: c.sourceUrl,

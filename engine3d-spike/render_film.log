@@ -1,0 +1,125 @@
+Bundling 6%
+Bundling 12%
+Bundling 24%
+Bundling 51%
+Bundling 65%
+Bundling 71%
+Bundling 76%
+Bundling 81%
+Bundling 86%
+Bundling 91%
+Bundling 98%
+Bundling 100%
+Getting composition
+[90mComposition          Film[39m
+[90mCodec                h264[39m
+[90mOutput               out/film.mp4[39m
+[90mConcurrency          2x[39m
+Rendered 0/105
+
+💡 Get help for this issue at https://remotion.dev/docs/timeout
+
+[31mAn error occurred while rendering frame 1:[39m
+[31m[41m[37m Error [39m[31m[49m[39m [31mA delayRender() "measure-words" was called but not cleared after 28000ms. See https://remotion.dev/docs/timeout for help. [39m
+
+at [4mnode_modules/remotion/dist/esm/index.mjs:936[24m
+[90m934[39m │ [90m  if (environment.isClientSideRendering) {[39m
+[90m935[39m │ [90m    scope.remotion_cancelledError = getErrorStackWithMessage(Error(message));[39m
+936 │   } else {
+[90m937[39m │ [90m    cancelRenderInternal(scope, Error(message));[39m
+[90m938[39m │ [90m  }[39m
+[90m939[39m │ [90m}, timeoutToUse)[39m
+
+
+[31m🕧 The delayRender() call is located at:[39m
+
+at [4mnode_modules/remotion/dist/esm/index.mjs:917[24m
+[90m915[39m │ [90mconst handle = Math.random();[39m
+[90m916[39m │ [90mscope.remotion_delayRenderHandles.push(handle);[39m
+917 │ const called = Error().stack?.replace(/^Error/g, "") ?? "";
+[90m918[39m │ [90mif (environment.isRendering) {[39m
+[90m919[39m │ [90m  const timeoutToUse = (options?.timeoutInMilliseconds ?? scope.remotion_puppeteerTimeout ?? defaultTimeout) - 2000;[39m
+[90m920[39m │ [90m  const retriesLeft = (options?.retries ?? 0) - (scope.remotion_attempt - 1);[39m
+
+at [4mnode_modules/remotion/dist/esm/index.mjs:949[24m
+[90m947[39m │ [90m  return Math.random();[39m
+[90m948[39m │ [90m}[39m
+949 │ return delayRenderInternal({
+[90m950[39m │ [90m  scope: window,[39m
+[90m951[39m │ [90m  environment: getRemotionEnvironment(),[39m
+[90m952[39m │ [90m  label: label2 ?? null,[39m
+
+at [4msrc/engine3d/core/text.ts:37[24m
+[90m35[39m │ [90m  emphasis?: string[39m
+[90m36[39m │ [90m): WordLayout | null {[39m
+37 │   const [handle] = useState(() => delayRender("measure-words"));
+[90m38[39m │ [90m  const [layout, setLayout] = useState<WordLayout | null>(null);[39m
+[90m39[39m │ 
+[90m40[39m │ [90m  useEffect(() => {[39m
+[90mat cf [as useState] [94m(node_modules/react-reconciler/cjs/react-reconciler.production.min.js:85)[39m[90m[39m
+[90mat exports.useState [94m(node_modules/react/cjs/react.production.min.js:26)[39m[90m[39m
+
+at [4msrc/engine3d/core/text.ts:37[24m
+[90m35[39m │ [90m  emphasis?: string[39m
+[90m36[39m │ [90m): WordLayout | null {[39m
+37 │   const [handle] = useState(() => delayRender("measure-words"));
+[90m38[39m │ [90m  const [layout, setLayout] = useState<WordLayout | null>(null);[39m
+[90m39[39m │ 
+[90m40[39m │ [90m  useEffect(() => {[39m
+
+at [4msrc/engine3d/components/KineticText.tsx:37[24m
+[90m35[39m │ [90m}) => {[39m
+[90m36[39m │ [90m  const frame = useCurrentFrame();[39m
+37 │   const layout = useWordLayout(headline, fontUrl, fontSize, emphasis);
+[90m38[39m │ 
+[90m39[39m │ [90m  // one shared gradient material for the accent run — continuous across word meshes[39m
+[90m40[39m │ [90m  const gradMat = useMemo(() => {[39m
+[90mat Ke [94m(node_modules/react-reconciler/cjs/react-reconciler.production.min.js:78)[39m[90m[39m
+[90mat Sh [94m(node_modules/react-reconciler/cjs/react-reconciler.production.min.js:196)[39m[90m[39m
+[90mat Rh [94m(node_modules/react-reconciler/cjs/react-reconciler.production.min.js:186)[39m[90m[39m
+
+at [4mnode_modules/remotion/dist/esm/index.mjs:917[24m
+[90m915[39m │ [90mconst handle = Math.random();[39m
+[90m916[39m │ [90mscope.remotion_delayRenderHandles.push(handle);[39m
+917 │ const called = Error().stack?.replace(/^Error/g, "") ?? "";
+[90m918[39m │ [90mif (environment.isRendering) {[39m
+[90m919[39m │ [90m  const timeoutToUse = (options?.timeoutInMilliseconds ?? scope.remotion_puppeteerTimeout ?? defaultTimeout) - 2000;[39m
+[90m920[39m │ [90m  const retriesLeft = (options?.retries ?? 0) - (scope.remotion_attempt - 1);[39m
+
+at [4mnode_modules/remotion/dist/esm/index.mjs:949[24m
+[90m947[39m │ [90m  return Math.random();[39m
+[90m948[39m │ [90m}[39m
+949 │ return delayRenderInternal({
+[90m950[39m │ [90m  scope: window,[39m
+[90m951[39m │ [90m  environment: getRemotionEnvironment(),[39m
+[90m952[39m │ [90m  label: label2 ?? null,[39m
+
+at [4msrc/engine3d/core/text.ts:37[24m
+[90m35[39m │ [90m  emphasis?: string[39m
+[90m36[39m │ [90m): WordLayout | null {[39m
+37 │   const [handle] = useState(() => delayRender("measure-words"));
+[90m38[39m │ [90m  const [layout, setLayout] = useState<WordLayout | null>(null);[39m
+[90m39[39m │ 
+[90m40[39m │ [90m  useEffect(() => {[39m
+[90mat cf [as useState] [94m(node_modules/react-reconciler/cjs/react-reconciler.production.min.js:85)[39m[90m[39m
+[90mat exports.useState [94m(node_modules/react/cjs/react.production.min.js:26)[39m[90m[39m
+
+at [4msrc/engine3d/core/text.ts:37[24m
+[90m35[39m │ [90m  emphasis?: string[39m
+[90m36[39m │ [90m): WordLayout | null {[39m
+37 │   const [handle] = useState(() => delayRender("measure-words"));
+[90m38[39m │ [90m  const [layout, setLayout] = useState<WordLayout | null>(null);[39m
+[90m39[39m │ 
+[90m40[39m │ [90m  useEffect(() => {[39m
+
+at [4msrc/engine3d/components/KineticText.tsx:37[24m
+[90m35[39m │ [90m}) => {[39m
+[90m36[39m │ [90m  const frame = useCurrentFrame();[39m
+37 │   const layout = useWordLayout(headline, fontUrl, fontSize, emphasis);
+[90m38[39m │ 
+[90m39[39m │ [90m  // one shared gradient material for the accent run — continuous across word meshes[39m
+[90m40[39m │ [90m  const gradMat = useMemo(() => {[39m
+[90mat Ke [94m(node_modules/react-reconciler/cjs/react-reconciler.production.min.js:78)[39m[90m[39m
+[90mat Sh [94m(node_modules/react-reconciler/cjs/react-reconciler.production.min.js:196)[39m[90m[39m
+[90mat Rh [94m(node_modules/react-reconciler/cjs/react-reconciler.production.min.js:186)[39m[90m[39m
+[90mat [94m(node_modules/remotion/dist/esm/index.mjs:937)[39m[90m[39m

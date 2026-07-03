@@ -4,7 +4,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { z } = require("zod");
-const openrouter = require("./openrouter");
+const llm = require("./llm");
 const frameRegistry = require("./frame_registry");
 
 const SYSTEM = fs.readFileSync(
@@ -54,7 +54,7 @@ async function generateBrief({ intent, signal }) {
   let userMsg = user;
 
   for (let attempt = 1; attempt <= 2; attempt++) {
-    const { text, tokensIn, tokensOut } = await openrouter.chat({
+    const { text, tokensIn, tokensOut } = await llm.chat({
       system: SYSTEM,
       user: userMsg,
       jsonMode: true,

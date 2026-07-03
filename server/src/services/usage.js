@@ -1,7 +1,6 @@
 // Per-job usage + cost tracker. Records:
-//   - LLM token usage (primary KIE Gemini 3.5 Flash / fallback OpenRouter MiniMax):
-//     input + output tokens, call count
-//   - TTS token usage (openai/gpt-4o-mini-tts via OpenRouter): input chars + estimated output audio tokens
+//   - LLM token usage (KIE Gemini 3.5 Flash): input + output tokens, call count
+//   - TTS token usage (openai/gpt-audio-mini via OpenRouter): input chars + estimated output audio tokens
 //   - External API call counts (Pixabay images/videos, Freesound, Internet Archive,
 //     Hyperframes render/lint, OpenRouter TTS)
 //
@@ -9,7 +8,7 @@
 //   Mixed setup — each stage is priced by the model it ACTUALLY runs on
 //   (resolved from config.llm.stageModels), not one flat rate. The composer
 //   (~90% of tokens) runs on deepseek; the cheap stages on gemini-flash-lite.
-//   TTS (openai/gpt-audio-mini) is estimated separately.
+//   TTS (openai/gpt-audio-mini via OpenRouter) is estimated separately.
 // Everything else is free.
 
 const config = require("../config");
@@ -31,8 +30,10 @@ const MODEL_PRICING = {
 };
 const DEFAULT_MODEL_PRICE = { in: 0.30, out: 2.50 };
 
-// Resolve the model a stage runs on (mirrors openrouter.modelForStage but kept
-// local to avoid a require cycle). qa/brief/script/etc. map to the default.
+// Resolve the model label a stage is costed against. This is a COST-ESTIMATION
+// label only — actual text generation now runs on KIE (see llm.js); these
+// config.llm.* model ids are retained purely to price token usage. qa/brief/
+// script/etc. map to the default.
 function modelForStage(stage) {
   const llm = config.llm || {};
   const kind = (llm.stageModels || {})[stage] || "default";
@@ -70,7 +71,7 @@ class UsageTracker {
     this.external = {}; // apiName -> callCount
   }
 
-  // LLM (OpenRouter chat completions). Pass `stage` to attribute the tokens to
+  // LLM (KIE chat completions). Pass `stage` to attribute the tokens to
   // a pipeline stage (brief/script/storyboard/assets/audio/composer/qa/…) for
   // the per-stage breakdown; defaults to "other" when a caller omits it.
   addLlm({ inputTokens = 0, outputTokens = 0, stage = "other" } = {}) {
@@ -83,12 +84,11 @@ class UsageTracker {
     b.inputTokens  += i;
     b.outputTokens += o;
     b.callCount    += 1;
-    this.addExternal("openrouter_chat");
+    this.addExternal("kie_chat");
   }
 
-  // TTS (openai/gpt-4o-mini-tts via OpenRouter /api/v1/tts).
-  // The endpoint returns raw audio bytes — no usage metadata is surfaced,
-  // so we estimate:
+  // TTS (openai/gpt-audio-mini via OpenRouter chat-completions audio). The stream
+  // returns raw audio bytes — no usage metadata is surfaced — so we estimate:
   //   inputTokens  ≈ ceil(inputChars / 4)              (English ~4 chars/token)
   //   outputTokens ≈ round(spokenSec * 50 tok/sec)     (OpenAI audio tokens,
   //                                                     ~3000/minute per OpenAI docs)

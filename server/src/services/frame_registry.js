@@ -61,6 +61,53 @@ function resolvePack(requested) {
   return packs.includes(requested) ? requested : null;
 }
 
+// Tone keywords per pack — used by selectAutoPack to match a prompt to a fitting VISUAL
+// FAMILY, then spread within it. Packs can share keywords (a prompt usually fits several),
+// which is what gives variety: the prompt-hash breaks ties differently for different text.
+const PACK_VIBES = {
+  "midnight-glass": ["tech", "saas", "ai", "software", "startup", "data", "cloud", "cyber", "futur", "premium", "platform", "developer", "api"],
+  "vapor-chrome": ["crypto", "web3", "gaming", "neon", "cyber", "futur", "edgy", "nft", "metaverse", "trading", "esports"],
+  "aurora-spectrum": ["ai", "creative", "vibrant", "gradient", "modern", "app", "beauty", "music", "design", "colorful", "generative"],
+  "noir-spotlight": ["luxury", "premium", "cinematic", "fashion", "elegant", "film", "story", "watch", "jewelry", "spirits", "automotive"],
+  "kinetic-bold": ["sports", "energy", "fitness", "motivation", "launch", "hype", "event", "bold", "gym", "athletic", "performance", "power"],
+  "bauhaus-print": ["design", "editorial", "agency", "art", "creative", "magazine", "studio", "portfolio", "typography", "architecture"],
+  "biennale-yellow": ["art", "culture", "festival", "warm", "friendly", "event", "exhibition", "museum", "community", "gallery"],
+  "mono-corporate": ["corporate", "finance", "b2b", "enterprise", "consulting", "professional", "legal", "bank", "insurance", "invest", "compliance"],
+  "blockframe": ["product", "clean", "minimal", "professional", "hardware", "utility", "tool", "dashboard", "logistics", "manufacturing"],
+  "bloom-illustrated": ["friendly", "playful", "education", "health", "wellness", "community", "nonprofit", "kids", "food", "recipe", "garden", "care", "learn"],
+};
+
+// SMART "auto" pack selection. Instead of an LLM that converges to one pack (>50% of videos
+// were midnight-glass), this matches the prompt to a visual family by keyword, spreads WITHIN
+// the family via a prompt hash, and EXCLUDES the recently-used packs so consecutive videos
+// never share a look. Deterministic: same (text, recent) → same pack.
+function selectAutoPack({ text = "", recentPacks = [] } = {}) {
+  const packs = listPacks();
+  if (!packs.length) return null;
+  const t = String(text).toLowerCase();
+
+  const scored = packs.map((p) => {
+    const kws = PACK_VIBES[p] || [];
+    return { p, score: kws.reduce((s, k) => s + (t.includes(k) ? 1 : 0), 0) };
+  });
+  const max = Math.max(...scored.map((s) => s.score));
+  // Candidates = the top-scoring family (plus the next tier so a family is never a 1-pack rut).
+  // No keyword hit at all → the whole registry is fair game (maximum spread).
+  let candidates = max > 0
+    ? scored.filter((s) => s.score >= Math.max(1, max - 1)).map((s) => s.p)
+    : packs.slice();
+
+  // Never repeat a recently-shipped pack (unless that would leave nothing).
+  const recent = new Set((recentPacks || []).filter(Boolean).slice(0, 3));
+  const fresh = candidates.filter((p) => !recent.has(p));
+  const pool = (fresh.length ? fresh : candidates).sort();
+
+  // Deterministic pick from the pool by hashing the prompt text (FNV-1a).
+  let h = 2166136261;
+  for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return pool[(h >>> 0) % pool.length];
+}
+
 // Load a pack's FRAME.md, mtime-cached so edits during development are
 // picked up without a restart.
 function getFrameMd(name) {
@@ -120,4 +167,4 @@ function getPackTokens(name) {
   return { name, colors, fonts };
 }
 
-module.exports = { listPacks, defaultPack, resolvePack, getFrameMd, getShowcasePath, getPackTokens, getPackVibe, FRAMES_DIR };
+module.exports = { listPacks, defaultPack, resolvePack, selectAutoPack, getFrameMd, getShowcasePath, getPackTokens, getPackVibe, FRAMES_DIR };

@@ -8,7 +8,7 @@
 // download needed), so rejected candidates cost nothing but the tiny vision call.
 
 const fs = require("node:fs");
-const openrouter = require("../openrouter");
+const llm = require("../llm");
 
 // Accepts a remote imageUrl (fresh provider candidate, no download) OR a local
 // imagePath (a cache hit) — whichever is given becomes the image content.
@@ -40,7 +40,7 @@ async function imageFitsTopic({ imageUrl, imagePath, topic, query, tracker, stri
       `on-theme image — even if generic — should PASS. When in doubt, keep it.\n` +
       `Reply exactly: {"fit": true|false, "reason": "<=6 words"}`;
   try {
-    const { text, tokensIn, tokensOut } = await openrouter.chat({
+    const { text, tokensIn, tokensOut } = await llm.chat({
       system: "You vet stock images for professional marketing/product videos. Reply STRICT JSON only.",
       user: [
         { type: "text", text: prompt },

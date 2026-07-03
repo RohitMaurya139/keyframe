@@ -16,7 +16,7 @@ const path = require("node:path");
 const config = require("../config");
 const db = require("../db");
 const { UsageTracker } = require("./usage");
-const { checkBudget, BUDGET_EXHAUSTED_MSG } = require("./openrouter");
+const { checkBudget, BUDGET_EXHAUSTED_MSG, MIN_CREDITS } = require("./llm");
 const { generateBrief } = require("./brief");
 const { generateScript, validateScript, normalizeScript } = require("./script");
 const { understandWebsite } = require("./ingest/website");
@@ -40,11 +40,11 @@ async function runIntake({ jobId, onApproved, skipBrief = false }) {
   const job = db.getRaw(jobId);
   if (!job) return;
 
-  // Fail fast and legibly when the daily LLM budget is gone — a silent
+  // Fail fast and legibly when the KIE credit balance is gone — a silent
   // fallback video with no voice is worse than an honest error.
   const budget = await checkBudget();
-  if (budget && budget.remaining !== null && budget.remaining < 0.15) {
-    console.warn(`[project] ${jobId} blocked: $${budget.remaining} of $${budget.limit} daily budget remaining`);
+  if (budget && budget.remaining !== null && budget.remaining < MIN_CREDITS) {
+    console.warn(`[project] ${jobId} blocked: ${budget.remaining} KIE credits left (< ${MIN_CREDITS} needed to start)`);
     db.markFailed(jobId, BUDGET_EXHAUSTED_MSG);
     return;
   }
@@ -283,8 +283,8 @@ async function runProduction({ jobId }) {
   }
 
   const budget = await checkBudget();
-  if (budget && budget.remaining !== null && budget.remaining < 0.15) {
-    console.warn(`[project] ${jobId} production blocked: $${budget.remaining} of $${budget.limit} daily budget remaining`);
+  if (budget && budget.remaining !== null && budget.remaining < MIN_CREDITS) {
+    console.warn(`[project] ${jobId} production blocked: ${budget.remaining} KIE credits left (< ${MIN_CREDITS} needed to start)`);
     db.markFailed(jobId, BUDGET_EXHAUSTED_MSG);
     return;
   }

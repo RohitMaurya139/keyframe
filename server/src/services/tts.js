@@ -1,10 +1,14 @@
-// TTS via OpenRouter's chat-completions audio modality (the /audio/speech
-// endpoint routes no models there as of 2026-06). Scheme, verified live:
+// TTS / voiceover via OpenRouter's chat-completions audio modality (KIE serves
+// the LLM text stages, but voiceover runs on OpenRouter's gpt-audio family).
+// Scheme, verified live:
 //   POST /chat/completions  model=openai/gpt-audio-mini
 //   modalities:["text","audio"], audio:{voice,format:"pcm16"}, stream:true
 // Audio arrives as base64 pcm16 deltas (24kHz mono) which we collect and
 // encode to mp3 with ffmpeg. The stream also yields a transcript of what was
 // actually spoken — returned for verification and (later) captions.
+//
+// Uses the OpenRouter credentials on config.llm (baseUrl/apiKey/httpReferer),
+// NOT config.llm.primary (that's the KIE text provider).
 //
 // Returns the mp3 path on success (v1 contract); throws on failure.
 

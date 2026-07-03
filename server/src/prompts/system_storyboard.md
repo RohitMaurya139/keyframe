@@ -33,10 +33,13 @@ Return ONLY a JSON object — no prose, no markdown fences:
       "id": "s1",
       "start": 0,
       "duration": <seconds>,
-      "kind": "<title|hook|bullet|quote|caption|shape-motion|chart|countdown|cta>",
+      "kind": "<title|hook|bullet|feature|dashboard|comparison|quote|caption|shape-motion|chart|countdown|cta>",
       "headline": "<short on-screen headline, ≤60 chars, or empty>",
       "subtext":  "<supporting line, ≤120 chars, or empty>",
+      "paragraph": "<optional supporting sentence, ≤160 chars — body copy so the scene doesn't feel empty>",
       "bullets":  ["<optional short bullets, each ≤50 chars>"],
+      "features": [ { "title": "<feature name, ≤26 chars>", "desc": "<one-line benefit, ≤60 chars>" } ],
+      "metrics":  [ { "value": <number>, "suffix": "<%|x|k+ or empty>", "label": "<what it measures, ≤18 chars>" } ],
       "emphasis": "<1-3 words in the headline to visually accent, or empty>",
       "animation": "<word-stagger|mask-reveal|blur-sharp|scale-pop|slide-up|slide-left|ken-burns-text|typewriter>",
       "visualMotif": "<short phrase describing the scene's non-text visual idea — e.g. 'pulsing gradient orb', 'rising bar chart', 'glowing line drawing itself'>",
@@ -87,6 +90,7 @@ The terminal scene's `animation` (`typewriter`) and `layout` must still differ f
 ## Writing principles
 
 - **One idea per scene.** If a scene has two ideas, split it.
+- **Fill the frame (content density).** A scene must never be just a headline + subtitle. Give each scene body: set `paragraph` (a supporting sentence) on most scenes. Use the rich scene kinds to fill the frame like a premium SaaS launch (Linear/Vercel/Stripe): `kind: "feature"` (3–4 `{title, desc}` highlights + optional `metrics`) for a capabilities scene; `kind: "dashboard"` (a `paragraph` + `metrics` KPIs + `features` as dashboard rows) for a product/analytics moment; `kind: "comparison"` (`features` = the wins, `bullets` = the old-way pains, `kicker` = your product name, `subtext` = the old-way label, one `metrics` payoff) for a before/after or us-vs-them beat. Never leave large empty regions.
 - **Beats are the scene's inner choreography.** 2–4 per scene: the FIRST beat is always at 0–0.15 (something visible enters immediately — no empty-ground moments); middle beats land content (subtext, counters, accents); the LAST beat starts the exit no later than 0.6s before the scene ends. `at` is relative to the scene's own start and must be < the scene's duration.
 - **`layout` picks the zone map**: `fullbleed` (one dominant element), `split-60-40` (content + visual), `grid-2x2` (cards/stats), `centered-card` (single framed statement).
 - **Every scene has motion.** `animation` is required and varied — do NOT use the same animation in consecutive scenes.

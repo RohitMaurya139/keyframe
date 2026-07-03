@@ -6,8 +6,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { z } = require("zod");
-const config = require("../config");
-const openrouter = require("./openrouter");
+const llm = require("./llm");
 
 const SYSTEM = fs.readFileSync(
   path.join(__dirname, "..", "prompts", "system_script.md"),
@@ -155,21 +154,19 @@ async function generateScript({ brief, signal }) {
   let lastErr = "";
   let userMsg = user;
 
-  // The default script model (gemini-2.5-flash) occasionally "lazy stops" and
-  // returns a truncated JSON object. openrouter.chat now retries+falls back on
-  // that, but as belt-and-suspenders the 2nd attempt escalates to a model that
-  // reliably emits the full script (verified: gemini-2.5-pro returns it whole).
-  const ESCALATION_MODEL = config.llm.scriptEscalationModel || "google/gemini-2.5-pro";
-
+  // The script model occasionally "lazy stops" and returns a truncated JSON
+  // object. callKie now retries that transparently on transient/bad-completion
+  // failures; this outer loop adds a SEMANTIC retry — attempt 2 re-runs KIE with
+  // the validation error fed back in (see userMsg below), which reliably coaxes a
+  // complete, schema-valid script on the second pass.
   for (let attempt = 1; attempt <= 2; attempt++) {
-    const { text, tokensIn, tokensOut } = await openrouter.chat({
+    const { text, tokensIn, tokensOut } = await llm.chat({
       system: SYSTEM,
       user: userMsg,
       jsonMode: true,
       stage: "script",
       temperature: 0.7,
       signal,
-      ...(attempt === 2 ? { model: ESCALATION_MODEL } : {}),
     });
     totalIn += tokensIn;
     totalOut += tokensOut;

@@ -27,11 +27,13 @@ const { acquire, hasProviderFor } = require("../services/asset_sources");
 const { synthesizeFitted } = require("../services/vo_fit");
 const { buildCues, writeSrt } = require("../services/captions");
 const { fetchMusic } = require("../services/audio_sources");
+const { dominantColors } = require("../services/ingest/website");
 const { getSfx } = require("../services/sfx_library");
 const { VALID_VOICES } = require("../services/audio_planner");
 const { buildFallback } = require("../services/fallback");
 const { normalizeComposition } = require("../services/normalize");
 const { render } = require("../services/renderer");
+const { renderThree, isThreeRenderable } = require("../services/three_render");
 const { reviewRender } = require("./qa_agent");
 
 function ms() { return Date.now(); }
@@ -56,8 +58,8 @@ function storyboardPromptFromScript(script, brief) {
 }
 
 // The voices the gpt-audio TTS family actually renders (tts.js AUDIO_VOICES).
-// pickVoice MUST resolve to one of these — emitting a tts-1-era voice
-// (fable/nova/onyx) would be silently downgraded to marin by tts.mapVoice().
+// pickVoice MUST resolve to one of these — an unknown name is silently
+// downgraded to marin by tts.mapVoice().
 const AUDIO_VOICES = new Set(["alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse", "marin", "cedar"]);
 
 function pickVoice(job, script) {
@@ -90,13 +92,27 @@ function pickVoice(job, script) {
 // artifacts each agent adds.
 
 async function frameSelectorAgent(s) {
-  // Resolve each candidate INDEPENDENTLY: a stale/removed job.frame_pack id
-  // resolves to null, and the old single combined resolvePack() then collapsed
-  // to a null (unstyled, generic) pack instead of trying the brief's valid pick.
-  const framePack = frameRegistry.resolvePack(s.job.frame_pack)
-    || frameRegistry.resolvePack(s.brief?.suggestedFramePack)
-    || frameRegistry.resolvePack("auto");
-  console.log(`[agents] frame_selector → ${framePack}`);
+  // A user's EXPLICIT pack choice always wins (strict-template promise). Only when they
+  // left it on "auto" (job.frame_pack is null) do we choose — and we do NOT trust the LLM's
+  // suggestedFramePack, which converged to midnight-glass on >50% of videos. Instead
+  // selectAutoPack matches the prompt to a visual family, spreads within it by prompt hash,
+  // and excludes the last few shipped packs so consecutive videos never share a look.
+  const userPack = frameRegistry.resolvePack(s.job.frame_pack);
+  let framePack = userPack;
+  if (!framePack) {
+    let recentPacks = [];
+    try { recentPacks = (db.listRecent({ limit: 8 }) || []).map((j) => j.framePack).filter(Boolean); } catch { /* best effort */ }
+    const text = [
+      s.job.prompt, s.brief?.improvedPrompt, s.brief?.tone,
+      (s.brief?.keyMessages || []).join(" "), s.brief?.audience, s.job.intent?.websiteUrl,
+    ].filter(Boolean).join(" ");
+    framePack = frameRegistry.selectAutoPack({ text, recentPacks })
+      || frameRegistry.resolvePack(s.brief?.suggestedFramePack)
+      || frameRegistry.resolvePack("auto");
+    console.log(`[agents] frame_selector → ${framePack} (smart-auto; recent: ${recentPacks.slice(0, 3).join(",") || "none"})`);
+  } else {
+    console.log(`[agents] frame_selector → ${framePack} (user choice)`);
+  }
   return { framePack };
 }
 
@@ -292,11 +308,20 @@ function topicAnchor(job, brief) {
 function pinUserAssets(job, jobDir) {
   const list = (job.user_assets || []).filter((a) => a && a.path);
   const out = [];
-  let i = 0;
+  let i = 0, iVid = 0;
   for (const a of list) {
-    if (a.type === "video") continue;
     let abs = a.path;
     try { if (!fs.existsSync(abs)) continue; } catch { continue; }
+    // VIDEO (b-roll) — pinned as MOVING footage; the scene-kit weaves it as a <video>
+    // background (Phase C). Copied as-is; standard mp4/webm play directly in HyperFrames.
+    if (a.type === "video") {
+      const vext = (path.extname(abs) || ".mp4").toLowerCase().slice(0, 5);
+      const vRel = `assets/videos/user_${iVid}${vext}`;
+      try { fs.mkdirSync(path.join(jobDir, "assets", "videos"), { recursive: true }); fs.copyFileSync(abs, path.join(jobDir, vRel)); } catch { continue; }
+      out.push({ path: vRel, type: "video", sceneId: null, style: "background", alt: "brand b-roll", license: "user content", sourceUrl: null, source: "user-upload", fromCache: false, kind: "broll" });
+      iVid++;
+      continue;
+    }
     const ext = (path.extname(abs) || ".jpg").toLowerCase().slice(0, 5);
     const relPath = `assets/images/user_${i}${ext}`;
     try { fs.copyFileSync(abs, path.join(jobDir, relPath)); } catch { continue; }
@@ -477,10 +502,53 @@ async function compositionAgent(s) {
     }))
   ).map((c) => ({ start: Math.round(c.start * 10) / 10, end: Math.round(c.end * 10) / 10, text: c.text }));
 
-  // Carry QA repair feedback into the composer when looping.
-  const storyboard = s.qa && s.qa.issues?.length
-    ? { ...s.storyboard, __qaIssuesToFix: s.qa.issues.map((i) => `at ${i.atSec}s [${i.severity}]: ${i.issue} — FIX: ${i.fix}`) }
-    : s.storyboard;
+  // Brand colors drive the scene-kit's accents so the whole film reads on-brand.
+  // Prefer the site's scraped palette; when there's none (upload-only, no URL), derive
+  // one from the user's uploaded LOGO/first image so branding still shows. Cached on the
+  // job so QA repair laps don't re-run ffmpeg. Threaded via the storyboard into deriveTheme.
+  let brandColors = (job.intent?.website?.brandColors || []).filter((c) => /^#[0-9a-f]{6}$/i.test(String(c || "").trim()));
+  if (!brandColors.length) {
+    if (Array.isArray(job.__brandColors)) {
+      brandColors = job.__brandColors;
+    } else {
+      const src = (job.user_assets || []).find((a) => a && a.type === "image" && (a.kind === "logo" || a.kind === "product"))
+        || (job.user_assets || []).find((a) => a && a.type === "image");
+      if (src?.path && fs.existsSync(src.path)) {
+        try { brandColors = (await dominantColors(src.path)).filter((c) => /^#[0-9a-f]{6}$/i.test(String(c || "").trim())); } catch { /* best effort */ }
+      }
+      job.__brandColors = brandColors; // cache (even if empty) so we don't re-extract each lap
+    }
+  }
+  if (brandColors.length) console.log(`[agents] brand accents: ${brandColors.join(",")}`);
+  // Carry QA repair feedback + brand colors into the composer when looping.
+  const storyboard = {
+    ...s.storyboard,
+    ...(s.qa && s.qa.issues?.length ? { __qaIssuesToFix: s.qa.issues.map((i) => `at ${i.atSec}s [${i.severity}]: ${i.issue} — FIX: ${i.fix}`) } : {}),
+    ...(brandColors.length ? { brandColors } : {}),
+  };
+
+  // Three.js render path (config.render.engine === "three"). Text-archetype storyboards render
+  // via the Remotion + R3F engine (engine3d-spike/); storyboards with asset scenes fall back to
+  // the scene-kit below. The engine consumes THIS SAME storyboard, so no LLM/orchestrator change.
+  if (config.render?.engine === "three" && !s.qa) {
+    if (isThreeRenderable(storyboard, job)) {
+      try {
+        db.setProgress(job.id, "rendering");
+        tracker.addExternal("three_render");
+        const visual = await renderThree({
+          jobId: job.id, jobDir, storyboard, framePack: s.framePack, brandColors,
+          dims, durationSec: job.duration, title: s.brief?.title || storyboard.title,
+          userAssets: job.user_assets || [],
+        });
+        console.log(`[agents] rendered via Three.js engine (renderEngine=three, ${storyboard.scenes?.length || 0} scenes)`);
+        return { visual, usedFallback: false, finalAttempt: "three", rendered: true };
+      } catch (e) {
+        console.warn(`[agents] three render failed (${String(e.message).slice(0, 200)}) — falling back to scene-kit`);
+      }
+    } else {
+      console.log(`[agents] renderEngine=three but storyboard has asset scenes or is non-landscape — using scene-kit`);
+    }
+  }
 
   const budget = (Number(config.server.stageBudgetSec) || 480) * 1000;
   // PRIMARY composer = the LLM composition agent (remix), unless disabled via
@@ -597,7 +665,7 @@ async function timelineAgent(s) {
         ...(s.voClips || []).map((c) => ({ path: c.path, startSec: c.startSec, volume: 1.0, kind: "vo" })),
         ...(s.sfxClips || []),
       ],
-      musicVolume: config.audio?.defaultMusicVolume ?? 0.15,
+      musicVolume: config.audio?.defaultMusicVolume ?? 0.10,
     },
   }).catch((e) => console.warn(`[agents] mix failed: ${e.message}`));
 

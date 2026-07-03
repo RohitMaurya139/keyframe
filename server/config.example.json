@@ -16,7 +16,14 @@
     "renderWorkers": 1
   },
   "llm": {
-    "provider": "openrouter",
+    "provider": "kie",
+    "minCredits": 20,
+    "primary": {
+      "provider": "kie",
+      "baseUrl": "https://api.kie.ai/gemini-3-5-flash-openai/v1",
+      "model": "gemini-3-5-flash",
+      "apiKey": ""
+    },
     "model":         "google/gemini-3.5-flash",
     "modelFast":     "google/gemini-3.5-flash",
     "modelFallback": "google/gemini-3.5-flash",
@@ -60,7 +67,7 @@
     "pixabayKey": "",
     "freesoundToken": "",
     "ttsModel": "openai/gpt-audio-mini",
-    "defaultMusicVolume": 0.22
+    "defaultMusicVolume": 0.10
   },
   "defaults": {
     "orientation": "horizontal",

@@ -3,7 +3,7 @@
 // more than 10%, ask the fast model ONCE for a tighter line and re-synth.
 
 const { spawn } = require("node:child_process");
-const openrouter = require("./openrouter");
+const llm = require("./llm");
 const { synthesize } = require("./tts");
 
 function probeDurationSec(filePath) {
@@ -23,7 +23,7 @@ function probeDurationSec(filePath) {
 
 async function tightenLine({ line, targetSec, signal }) {
   const targetWords = Math.max(3, Math.floor(targetSec * 2.6));
-  const { text, tokensIn, tokensOut } = await openrouter.chat({
+  const { text, tokensIn, tokensOut } = await llm.chat({
     system: "You tighten voiceover lines. Reply with ONLY the rewritten line — no quotes, no commentary. Preserve the meaning and any names/numbers exactly.",
     user: `Rewrite this voiceover line to at most ${targetWords} words so it can be spoken comfortably in ${targetSec} seconds:\n${line}`,
     stage: "vo_fit",

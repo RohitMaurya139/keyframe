@@ -246,4 +246,4 @@ async function understandWebsite({ url, workDir, timeoutMs = 60_000 }) {
   }
 }
 
-module.exports = { understandWebsite, findChrome };
+module.exports = { understandWebsite, findChrome, dominantColors };

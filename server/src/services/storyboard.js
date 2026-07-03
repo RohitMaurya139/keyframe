@@ -4,7 +4,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const config = require("../config");
-const openrouter = require("./openrouter");
+const llm = require("./llm");
 
 const SYSTEM = fs.readFileSync(
   path.join(__dirname, "..", "prompts", "system_storyboard.md"),
@@ -155,7 +155,7 @@ async function generateStoryboard({ prompt, duration, orientation, framePack }) 
 
   const system = await getSystem();
   for (let i = 1; i <= maxTries; i++) {
-    const { text, tokensIn, tokensOut } = await openrouter.chat({
+    const { text, tokensIn, tokensOut } = await llm.chat({
       system,
       user: augmentedUser,
       jsonMode: true,

@@ -1,0 +1,111 @@
+Bundling 6%
+Bundling 13%
+Bundling 33%
+Bundling 51%
+Bundling 60%
+Bundling 69%
+Bundling 74%
+Bundling 80%
+Bundling 85%
+Bundling 90%
+Bundling 95%
+Bundling 100%
+Getting composition
+[90mComposition          Hook[39m
+[90mCodec                h264[39m
+[90mOutput               out/hook_text.mp4[39m
+[90mConcurrency          2x[39m
+Rendered 0/90
+
+💡 Get help for this issue at https://remotion.dev/docs/timeout
+
+[31mAn error occurred while rendering frame 1:[39m
+[31m[41m[37m Error [39m[31m[49m[39m [31mA delayRender() "troika-font-sync" was called but not cleared after 28000ms. See https://remotion.dev/docs/timeout for help. [39m
+
+at [4mnode_modules/remotion/dist/esm/index.mjs:936[24m
+[90m934[39m │ [90m  if (environment.isClientSideRendering) {[39m
+[90m935[39m │ [90m    scope.remotion_cancelledError = getErrorStackWithMessage(Error(message));[39m
+936 │   } else {
+[90m937[39m │ [90m    cancelRenderInternal(scope, Error(message));[39m
+[90m938[39m │ [90m  }[39m
+[90m939[39m │ [90m}, timeoutToUse)[39m
+
+
+[31m🕧 The delayRender() call is located at:[39m
+
+at [4mnode_modules/remotion/dist/esm/index.mjs:917[24m
+[90m915[39m │ [90mconst handle = Math.random();[39m
+[90m916[39m │ [90mscope.remotion_delayRenderHandles.push(handle);[39m
+917 │ const called = Error().stack?.replace(/^Error/g, "") ?? "";
+[90m918[39m │ [90mif (environment.isRendering) {[39m
+[90m919[39m │ [90m  const timeoutToUse = (options?.timeoutInMilliseconds ?? scope.remotion_puppeteerTimeout ?? defaultTimeout) - 2000;[39m
+[90m920[39m │ [90m  const retriesLeft = (options?.retries ?? 0) - (scope.remotion_attempt - 1);[39m
+
+at [4mnode_modules/remotion/dist/esm/index.mjs:949[24m
+[90m947[39m │ [90m  return Math.random();[39m
+[90m948[39m │ [90m}[39m
+949 │ return delayRenderInternal({
+[90m950[39m │ [90m  scope: window,[39m
+[90m951[39m │ [90m  environment: getRemotionEnvironment(),[39m
+[90m952[39m │ [90m  label: label2 ?? null,[39m
+
+at [4msrc/HookScene.tsx:43[24m
+[90m41[39m │ [90m// ---- in-3D MSDF text with deterministic font loading (delayRender until troika syncs) ----[39m
+[90m42[39m │ [90mconst KText: React.FC<any> = ({ children, ...props }) => {[39m
+43 │   const [handle] = useState(() => delayRender("troika-font-sync"));
+[90m44[39m │ [90m  return ([39m
+[90m45[39m │ [90m    <Text font={FONT} onSync={() => continueRender(handle)} {...props}>[39m
+[90m46[39m │ [90m      {children}[39m
+[90mat cf [as useState] [94m(node_modules/react-reconciler/cjs/react-reconciler.production.min.js:85)[39m[90m[39m
+[90mat exports.useState [94m(node_modules/react/cjs/react.production.min.js:26)[39m[90m[39m
+
+at [4msrc/HookScene.tsx:43[24m
+[90m41[39m │ [90m// ---- in-3D MSDF text with deterministic font loading (delayRender until troika syncs) ----[39m
+[90m42[39m │ [90mconst KText: React.FC<any> = ({ children, ...props }) => {[39m
+43 │   const [handle] = useState(() => delayRender("troika-font-sync"));
+[90m44[39m │ [90m  return ([39m
+[90m45[39m │ [90m    <Text font={FONT} onSync={() => continueRender(handle)} {...props}>[39m
+[90m46[39m │ [90m      {children}[39m
+[90mat Ke [94m(node_modules/react-reconciler/cjs/react-reconciler.production.min.js:78)[39m[90m[39m
+[90mat Sh [94m(node_modules/react-reconciler/cjs/react-reconciler.production.min.js:196)[39m[90m[39m
+[90mat Rh [94m(node_modules/react-reconciler/cjs/react-reconciler.production.min.js:186)[39m[90m[39m
+[90mat Qh [94m(node_modules/react-reconciler/cjs/react-reconciler.production.min.js:186)[39m[90m[39m
+
+at [4mnode_modules/remotion/dist/esm/index.mjs:917[24m
+[90m915[39m │ [90mconst handle = Math.random();[39m
+[90m916[39m │ [90mscope.remotion_delayRenderHandles.push(handle);[39m
+917 │ const called = Error().stack?.replace(/^Error/g, "") ?? "";
+[90m918[39m │ [90mif (environment.isRendering) {[39m
+[90m919[39m │ [90m  const timeoutToUse = (options?.timeoutInMilliseconds ?? scope.remotion_puppeteerTimeout ?? defaultTimeout) - 2000;[39m
+[90m920[39m │ [90m  const retriesLeft = (options?.retries ?? 0) - (scope.remotion_attempt - 1);[39m
+
+at [4mnode_modules/remotion/dist/esm/index.mjs:949[24m
+[90m947[39m │ [90m  return Math.random();[39m
+[90m948[39m │ [90m}[39m
+949 │ return delayRenderInternal({
+[90m950[39m │ [90m  scope: window,[39m
+[90m951[39m │ [90m  environment: getRemotionEnvironment(),[39m
+[90m952[39m │ [90m  label: label2 ?? null,[39m
+
+at [4msrc/HookScene.tsx:43[24m
+[90m41[39m │ [90m// ---- in-3D MSDF text with deterministic font loading (delayRender until troika syncs) ----[39m
+[90m42[39m │ [90mconst KText: React.FC<any> = ({ children, ...props }) => {[39m
+43 │   const [handle] = useState(() => delayRender("troika-font-sync"));
+[90m44[39m │ [90m  return ([39m
+[90m45[39m │ [90m    <Text font={FONT} onSync={() => continueRender(handle)} {...props}>[39m
+[90m46[39m │ [90m      {children}[39m
+[90mat cf [as useState] [94m(node_modules/react-reconciler/cjs/react-reconciler.production.min.js:85)[39m[90m[39m
+[90mat exports.useState [94m(node_modules/react/cjs/react.production.min.js:26)[39m[90m[39m
+
+at [4msrc/HookScene.tsx:43[24m
+[90m41[39m │ [90m// ---- in-3D MSDF text with deterministic font loading (delayRender until troika syncs) ----[39m
+[90m42[39m │ [90mconst KText: React.FC<any> = ({ children, ...props }) => {[39m
+43 │   const [handle] = useState(() => delayRender("troika-font-sync"));
+[90m44[39m │ [90m  return ([39m
+[90m45[39m │ [90m    <Text font={FONT} onSync={() => continueRender(handle)} {...props}>[39m
+[90m46[39m │ [90m      {children}[39m
+[90mat Ke [94m(node_modules/react-reconciler/cjs/react-reconciler.production.min.js:78)[39m[90m[39m
+[90mat Sh [94m(node_modules/react-reconciler/cjs/react-reconciler.production.min.js:196)[39m[90m[39m
+[90mat Rh [94m(node_modules/react-reconciler/cjs/react-reconciler.production.min.js:186)[39m[90m[39m
+[90mat Qh [94m(node_modules/react-reconciler/cjs/react-reconciler.production.min.js:186)[39m[90m[39m
+[90mat [94m(node_modules/remotion/dist/esm/index.mjs:937)[39m[90m[39m

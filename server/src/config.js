@@ -57,22 +57,23 @@ function validate(cfg) {
   must(cfg.server.maxDurationSec > 0, "maxDurationSec must be positive");
   must(cfg.server.minDurationSec > 0 && cfg.server.minDurationSec <= cfg.server.maxDurationSec,
        "minDurationSec invalid");
-  must(cfg.llm.model, "llm.model missing");
-  must(cfg.llm.baseUrl, "llm.baseUrl missing");
+  // Split providers: KIE for text generation (llm.primary), OpenRouter for
+  // TTS/voiceover (llm.baseUrl + llm.apiKey, used by tts.js gpt-audio). Both
+  // credential sets are required.
+  must(cfg.llm.model, "llm.model missing"); // usage.js cost label
+  must(cfg.llm.baseUrl, "llm.baseUrl missing (OpenRouter — used for TTS/voiceover)");
   for (const q of Object.values(cfg.qualities)) {
     must(q.short > 0 && q.long > 0, "quality entries must have 'short' and 'long' pixel values");
   }
   if (!cfg.llm.apiKey) {
-    must(process.env.OPENROUTER_API_KEY, "llm.apiKey missing and OPENROUTER_API_KEY env not set");
+    must(process.env.OPENROUTER_API_KEY, "llm.apiKey missing and OPENROUTER_API_KEY env not set (needed for TTS/voiceover)");
   }
-  // Primary provider (KIE) is optional — if absent or unkeyed, the LLM client
-  // simply runs OpenRouter as the sole provider. If present, it must be complete.
-  if (cfg.llm.primary) {
-    must(cfg.llm.primary.baseUrl, "llm.primary.baseUrl missing");
-    must(cfg.llm.primary.model, "llm.primary.model missing");
-    if (!cfg.llm.primary.apiKey) {
-      must(process.env.KIE_API_KEY, "llm.primary set but apiKey missing and KIE_API_KEY env not set");
-    }
+  // KIE — the LLM text provider.
+  must(cfg.llm.primary, "llm.primary (KIE) missing — it is the LLM text provider");
+  must(cfg.llm.primary.baseUrl, "llm.primary.baseUrl missing");
+  must(cfg.llm.primary.model, "llm.primary.model missing");
+  if (!cfg.llm.primary.apiKey) {
+    must(process.env.KIE_API_KEY, "llm.primary.apiKey missing and KIE_API_KEY env not set");
   }
 }
 
@@ -96,12 +97,16 @@ function build() {
     return dimensionsFor(orientation, quality, cfg);
   };
 
-  // Allow env to override the API keys at runtime without editing config.json.
-  if (process.env.OPENROUTER_API_KEY) {
-    cfg.llm.apiKey = process.env.OPENROUTER_API_KEY;
-  }
+  // Env key overrides (rotate without editing config.json).
+  // KIE (text/LLM): env wins over the inline config value.
   if (process.env.KIE_API_KEY && cfg.llm.primary) {
     cfg.llm.primary.apiKey = process.env.KIE_API_KEY;
+  }
+  // OpenRouter (TTS/voiceover): the INLINE config.json value wins if present;
+  // env is only a fallback (fresh deploys). Guarded so a STALE OPENROUTER_API_KEY
+  // in the shell/.env can't shadow a freshly-rotated inline key.
+  if (process.env.OPENROUTER_API_KEY && !cfg.llm.apiKey) {
+    cfg.llm.apiKey = process.env.OPENROUTER_API_KEY;
   }
   // Stock-media keys. PIXABAY_API_KEY feeds both the modern provider path
   // (assetProviders.pixabay) and the legacy audio.pixabayKey fallback.
@@ -217,6 +222,25 @@ function build() {
   else if (cfg.assets.relevanceStrict == null) cfg.assets.relevanceStrict = true;
   if (process.env.ASSET_VISION_RELEVANCE != null) cfg.assets.visionRelevance = boolEnv(process.env.ASSET_VISION_RELEVANCE);
   else if (cfg.assets.visionRelevance == null) cfg.assets.visionRelevance = true;
+  // videoBroll (ON by default) — weave uploaded + stock VIDEO clips as real moving
+  // <video> backgrounds behind text scenes (Phase C). Disable via ASSET_VIDEO_BROLL=0.
+  if (process.env.ASSET_VIDEO_BROLL != null) cfg.assets.videoBroll = boolEnv(process.env.ASSET_VIDEO_BROLL);
+  else if (cfg.assets.videoBroll == null) cfg.assets.videoBroll = true;
+  // threeD (ON by default) — a deterministic Three.js depth-particle backdrop on DARK packs
+  // for real WebGL 3D motion behind the content. Disable via ASSET_THREE_D=0.
+  if (process.env.ASSET_THREE_D != null) cfg.assets.threeD = boolEnv(process.env.ASSET_THREE_D);
+  else if (cfg.assets.threeD == null) cfg.assets.threeD = true;
+
+  // Render engine. "scenekit" (default — HyperFrames CSS/GSAP scene-kit) or "three"
+  // (Remotion + React-Three-Fiber pipeline in engine3d-spike/). With RENDER_ENGINE=three,
+  // text-archetype storyboards (hook/stat/cta/bullet/caption/quote, landscape) render via
+  // Three.js; storyboards containing asset scenes (screenshot/terminal/split/logo/product)
+  // fall back to the scene-kit until those archetypes are ported. See docs/threejs-video-engine.md.
+  cfg.render = cfg.render || {};
+  cfg.render.engine = (process.env.RENDER_ENGINE || cfg.render.engine || "scenekit").toLowerCase();
+  cfg.render.threeDir = process.env.RENDER_THREE_DIR || cfg.render.threeDir || path.resolve(__dirname, "..", "..", "engine3d-spike");
+  cfg.render.threeGl = process.env.RENDER_THREE_GL || cfg.render.threeGl || "angle";
+  cfg.render.threeConcurrency = String(process.env.RENDER_THREE_CONCURRENCY || cfg.render.threeConcurrency || "1");
 
   validate(cfg);
 

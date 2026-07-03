@@ -135,7 +135,7 @@ async function main() {
     console.log(`[server] listening on :${config.server.port}`);
     console.log(`[server] videosDir=${config.paths.videosDir}`);
     console.log(`[server] jobsDir=${config.paths.jobsDir}`);
-    console.log(`[server] model=${config.llm.model}`);
+    console.log(`[server] llm=kie:${config.llm.primary.model} (text) | tts=openrouter:${config.audio?.ttsModel || "openai/gpt-audio-mini"} (voiceover)`);
   });
 
   const stopJanitor = janitor.start();

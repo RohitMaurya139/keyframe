@@ -5,7 +5,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const openrouter = require("./openrouter");
+const llm = require("./llm");
 const { getComposerSkills } = require("./skills");
 const { getCatalogSummary } = require("./catalog");
 const frameRegistry = require("./frame_registry");
@@ -487,7 +487,7 @@ async function compose(storyboard, { width, height, fps, duration, maxRetries, a
   for (let i = 1; i <= tries; i++) {
     if (abortSignal?.aborted) throw abortSignal.reason || new Error("composer aborted");
     console.log(`[composer] attempt ${i}/${tries} — sending to LLM`);
-    const { text, tokensIn, tokensOut } = await openrouter.chat({
+    const { text, tokensIn, tokensOut } = await llm.chat({
       system,
       user,
       userSuffix: feedback,

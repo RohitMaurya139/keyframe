@@ -44,7 +44,7 @@ async function mix({
   durationSec,
   ttsPath = null,
   musicPath = null,
-  musicVolume = 0.15,
+  musicVolume = 0.10, // music is a BED under the (normalised) voiceover, not a peer
   sfx = [],
 }) {
   // Build layer list (entries are just metadata; input args built separately).
@@ -73,11 +73,16 @@ async function mix({
   }
   for (const s of sfx) {
     if (!s.path) continue;
+    const kind = s.kind || "sfx";
+    // Drop a percussive SFX (whoosh/impact/riser) that lands in the last ~1.2s — it can't
+    // resolve before the cut and reads as a jarring "different sound" at the very end.
+    // VO (speech) is exempt: a closing line at the final scene is intentional.
+    if (kind !== "vo" && (s.startSec || 0) > durationSec - 1.2) continue;
     inputs.push("-i", s.path);
     layers.push({
       // Voiceover clips arrive tagged kind:"vo" so the mixer can duck music
       // under speech; everything else defaults to sfx.
-      kind: s.kind || "sfx",
+      kind,
       idx: nextIdx++,
       volume: s.volume ?? 0.5,
       delayMs: Math.max(0, Math.round((s.startSec || 0) * 1000)),
@@ -101,10 +106,14 @@ async function mix({
 
   for (const l of layers) {
     const label = `a${l.idx}`;
-    const chain = l.delayMs > 0
-      ? `adelay=${l.delayMs}|${l.delayMs},volume=${l.volume}`
-      : `volume=${l.volume}`;
     const isVoice = l.kind === "vo" || l.kind === "tts";
+    // VOICEOVER MUST SIT ABOVE THE MUSIC. Raw TTS clips are often low-amplitude, so at a
+    // flat volume the 0.15 music bed could bury them. Normalise every VO clip to a
+    // consistent, prominent speech loudness (-16 LUFS, -1.5 dB true-peak) FIRST — this
+    // also gives the sidechain a strong key so the music actually ducks under speech.
+    const norm = isVoice ? "loudnorm=I=-16:TP=-1.5:LRA=11," : "";
+    const delay = l.delayMs > 0 ? `adelay=${l.delayMs}|${l.delayMs},` : "";
+    const chain = `${norm}${delay}volume=${l.volume}`;
     if (duck && isVoice) {
       // Split each VO: one copy to the final mix, one to the duck key.
       parts.push(`[${l.idx}:a]${chain},aresample=44100,asplit=2[${label}m][${label}k]`);
@@ -118,10 +127,13 @@ async function mix({
 
   if (musicLayer) {
     // Fade in/out so music never starts or ends abruptly. atrim gives the
-    // afade-out a defined endpoint on the infinite stream_loop input.
-    const fadeOutStart = Math.max(0, durationSec - 1.2);
+    // afade-out a defined endpoint on the infinite stream_loop input. The fade-out is
+    // LONG (≈25% of the video, 2–3s) on purpose: we truncate a full-length track to the
+    // clip length, so its tail can land mid-phrase or on a beat/drop — a gentle 2–3s fade
+    // dissolves that "different sound at the end" instead of exposing it under a short 1.2s cut.
+    const fadeOutDur = Math.min(3, Math.max(1.5, durationSec * 0.25));
+    const fadeOutStart = Math.max(0, durationSec - fadeOutDur);
     const fadeInDur = Math.min(0.8, durationSec);
-    const fadeOutDur = Math.min(1.2, durationSec);
     parts.push(
       `[${musicLayer.idx}:a]atrim=0:${durationSec},volume=${musicLayer.volume},` +
       `afade=t=in:st=0:d=${fadeInDur},afade=t=out:st=${fadeOutStart}:d=${fadeOutDur},aresample=44100[muspre]`
@@ -133,7 +145,9 @@ async function mix({
       } else {
         parts.push(`${keyLabels.join("")}amix=inputs=${keyLabels.length}:duration=longest:normalize=0,aresample=44100[vokey]`);
       }
-      parts.push(`[muspre][vokey]sidechaincompress=threshold=0.03:ratio=8:attack=20:release=400[musfinal]`);
+      // Duck the music HARD under speech: with a normalised VO key, this drops the bed
+      // clearly whenever the voiceover is talking, then recovers in the gaps.
+      parts.push(`[muspre][vokey]sidechaincompress=threshold=0.05:ratio=12:attack=15:release=350[musfinal]`);
     } else {
       parts.push(`[muspre]anull[musfinal]`);
     }

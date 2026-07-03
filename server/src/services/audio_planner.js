@@ -3,7 +3,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const openrouter = require("./openrouter");
+const llm = require("./llm");
 
 const SYSTEM = fs.readFileSync(
   path.join(__dirname, "..", "prompts", "system_audio.md"),
@@ -107,7 +107,7 @@ async function planAudio(storyboard, flags) {
 
   for (let i = 0; i < tries; i++) {
     try {
-      const { text, tokensIn: tIn, tokensOut: tOut } = await openrouter.chat({
+      const { text, tokensIn: tIn, tokensOut: tOut } = await llm.chat({
         system: SYSTEM,
         user: buildUser(storyboard, flags),
         jsonMode: true,

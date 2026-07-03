@@ -1,0 +1,110 @@
+[90mDownloading Chrome Headless Shell https://www.remotion.dev/chrome-headless-shell[39m
+Downloading from: https://storage.googleapis.com/chrome-for-testing-public/149.0.7790.0/win64/chrome-headless-shell-win64.zip
+Getting Headless Shell - 9.5 Mb/113.3 Mb
+Getting Headless Shell - 19.1 Mb/113.3 Mb
+Getting Headless Shell - 28.6 Mb/113.3 Mb
+Getting Headless Shell - 38.2 Mb/113.3 Mb
+Getting Headless Shell - 47.7 Mb/113.3 Mb
+Getting Headless Shell - 57.3 Mb/113.3 Mb
+Getting Headless Shell - 66.8 Mb/113.3 Mb
+Getting Headless Shell - 76.4 Mb/113.3 Mb
+Getting Headless Shell - 85.9 Mb/113.3 Mb
+Getting Headless Shell - 95.5 Mb/113.3 Mb
+Getting Headless Shell - 105 Mb/113.3 Mb
+Got Headless Shell
+Bundling 6%
+Bundling 24%
+Bundling 38%
+Bundling 51%
+Bundling 65%
+Bundling 70%
+Bundling 75%
+Bundling 80%
+Bundling 85%
+Bundling 91%
+Bundling 98%
+Bundling 100%
+Getting composition
+⚡️ Cached bundle. Subsequent renders will be faster.
+[90mComposition          Hook[39m
+[90mCodec                h264[39m
+[90mOutput               out/hook.mp4[39m
+[90mConcurrency          2x[39m
+Rendered 0/90
+[40m Tab 1, node_modules/its-fine/dist/index.js:64 [49m [31m[0mTypeError: easing is not a function[0m[39m
+[31m[0m    at http://localhost:3000/bundle.js:79509:16[0m[39m
+[31m[0m    at interpolateFunction (http://localhost:3000/bundle.js:78863:12)[0m[39m
+[31m[0m    at interpolateSegment (http://localhost:3000/bundle.js:78900:10)[0m[39m
+[31m[0m    at interpolateNumber (http://localhost:3000/bundle.js:78930:16)[0m[39m
+[31m[0m    at interpolate (http://localhost:3000/bundle.js:79132:10)[0m[39m
+[31m[0m    at Rig (http://localhost:3000/bundle.js:74668:32)[0m[39m
+[31m[0m    at Ke (http://localhost:3000/bundle.js:75571:137)[0m[39m
+[31m[0m    at Sh (http://localhost:3000/bundle.js:75689:385)[0m[39m
+[31m[0m    at Rh (http://localhost:3000/bundle.js:75679:379)[0m[39m
+[31m[0m    at Qh (http://localhost:3000/bundle.js:75679:310)[0m[39m
+[40m Tab 1, node_modules/its-fine/dist/index.js:64 [49m [31m[0mTypeError: easing is not a function[0m[39m
+[31m[0m    at http://localhost:3000/bundle.js:79509:16[0m[39m
+[31m[0m    at interpolateFunction (http://localhost:3000/bundle.js:78863:12)[0m[39m
+[31m[0m    at interpolateSegment (http://localhost:3000/bundle.js:78900:10)[0m[39m
+[31m[0m    at interpolateNumber (http://localhost:3000/bundle.js:78930:16)[0m[39m
+[31m[0m    at interpolate (http://localhost:3000/bundle.js:79132:10)[0m[39m
+[31m[0m    at Rig (http://localhost:3000/bundle.js:74668:32)[0m[39m
+[31m[0m    at Ke (http://localhost:3000/bundle.js:75571:137)[0m[39m
+[31m[0m    at Sh (http://localhost:3000/bundle.js:75689:385)[0m[39m
+[31m[0m    at Rh (http://localhost:3000/bundle.js:75679:379)[0m[39m
+[31m[0m    at Qh (http://localhost:3000/bundle.js:75679:310)[0m[39m
+[40m Tab 0, node_modules/its-fine/dist/index.js:64 [49m [31m[0mTypeError: easing is not a function[0m[39m
+[31m[0m    at http://localhost:3000/bundle.js:79509:16[0m[39m
+[31m[0m    at interpolateFunction (http://localhost:3000/bundle.js:78863:12)[0m[39m
+[31m[0m    at interpolateSegment (http://localhost:3000/bundle.js:78900:10)[0m[39m
+[31m[0m    at interpolateNumber (http://localhost:3000/bundle.js:78930:16)[0m[39m
+[31m[0m    at interpolate (http://localhost:3000/bundle.js:79132:10)[0m[39m
+[31m[0m    at Rig (http://localhost:3000/bundle.js:74668:32)[0m[39m
+[31m[0m    at Ke (http://localhost:3000/bundle.js:75571:137)[0m[39m
+[31m[0m    at Sh (http://localhost:3000/bundle.js:75689:385)[0m[39m
+[31m[0m    at Rh (http://localhost:3000/bundle.js:75679:379)[0m[39m
+[31m[0m    at Qh (http://localhost:3000/bundle.js:75679:310)[0m[39m
+[40m Tab 0, node_modules/its-fine/dist/index.js:64 [49m [31m[0mTypeError: easing is not a function[0m[39m
+[31m[0m    at http://localhost:3000/bundle.js:79509:16[0m[39m
+[31m[0m    at interpolateFunction (http://localhost:3000/bundle.js:78863:12)[0m[39m
+[31m[0m    at interpolateSegment (http://localhost:3000/bundle.js:78900:10)[0m[39m
+[31m[0m    at interpolateNumber (http://localhost:3000/bundle.js:78930:16)[0m[39m
+[31m[0m    at interpolate (http://localhost:3000/bundle.js:79132:10)[0m[39m
+[31m[0m    at Rig (http://localhost:3000/bundle.js:74668:32)[0m[39m
+[31m[0m    at Ke (http://localhost:3000/bundle.js:75571:137)[0m[39m
+[31m[0m    at Sh (http://localhost:3000/bundle.js:75689:385)[0m[39m
+[31m[0m    at Rh (http://localhost:3000/bundle.js:75679:379)[0m[39m
+[31m[0m    at Qh (http://localhost:3000/bundle.js:75679:310)[0m[39m
+
+[31mAn error occurred while rendering frame 1:[39m
+[31m[41m[37m TypeError [39m[31m[49m[39m [31measing is not a function[39m
+
+at [4mnode_modules/remotion/dist/esm/index.mjs:3227[24m
+[90m3225[39m │ [90mstatic inOut(easing) {[39m
+[90m3226[39m │ [90m  return (t) => {[39m
+3227 │     if (t < 0.5) {
+[90m3228[39m │ [90m      return easing(t * 2) / 2;[39m
+[90m3229[39m │ [90m    }[39m
+[90m3230[39m │ [90m    return 1 - easing((1 - t) * 2) / 2;[39m
+
+[90mat interpolateFunction [94m(node_modules/remotion/dist/esm/index.mjs:2581)[39m[90m[39m
+[90mat interpolateSegment [94m(node_modules/remotion/dist/esm/index.mjs:2618)[39m[90m[39m
+[90mat interpolateNumber [94m(node_modules/remotion/dist/esm/index.mjs:2648)[39m[90m[39m
+[90mat interpolate [94m(node_modules/remotion/dist/esm/index.mjs:2850)[39m[90m[39m
+
+at [4msrc/HookScene.tsx:105[24m
+[90m103[39m │ [90mconst Rig: React.FC = () => {[39m
+[90m104[39m │ [90m  const frame = useCurrentFrame();[39m
+105 │   const camera = useThree((s) => s.camera);
+[90m106[39m │ [90m  const z = interpolate(frame, [0, 90], [7.2, 5.0], { easing: Easing.inOut(Easing.sine) });[39m
+[90m107[39m │ [90m  const x = interpolate(frame, [0, 90], [-0.8, 0.8], { easing: Easing.inOut(Easing.sine) });[39m
+[90m108[39m │ [90m  const y = interpolate(frame, [0, 90], [0.5, -0.2], { easing: Easing.inOut(Easing.sine) });[39m
+[90mat Ke [94m(node_modules/react-reconciler/cjs/react-reconciler.production.min.js:77)[39m[90m[39m
+[90mat Sh [94m(node_modules/react-reconciler/cjs/react-reconciler.production.min.js:195)[39m[90m[39m
+[90mat Rh [94m(node_modules/react-reconciler/cjs/react-reconciler.production.min.js:185)[39m[90m[39m
+[90mat Qh [94m(node_modules/react-reconciler/cjs/react-reconciler.production.min.js:185)[39m[90m[39m
+[90mat Gh [94m(node_modules/react-reconciler/cjs/react-reconciler.production.min.js:185)[39m[90m[39m
+[90mat Lh [94m(node_modules/react-reconciler/cjs/react-reconciler.production.min.js:176)[39m[90m[39m
+[90mat Eh [94m(node_modules/react-reconciler/cjs/react-reconciler.production.min.js:174)[39m[90m[39m
+[90mat J [94m(node_modules/scheduler/cjs/scheduler.production.min.js:12)[39m[90m[39m
+[90mat R [94m(node_modules/scheduler/cjs/scheduler.production.min.js:13)[39m[90m[39m
