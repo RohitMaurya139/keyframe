@@ -14,7 +14,7 @@ const config = require("../config");
 const { publishRenderedMp4 } = require("./renderer");
 
 const WINDOWS = process.platform === "win32";
-const SUPPORTED_KINDS = new Set(["hook", "stat", "chart", "cta", "bullet", "caption", "quote", "feature", "dashboard", "comparison", "logo", "product", "screenshot", "image", "photo", "graphic"]);
+const SUPPORTED_KINDS = new Set(["hook", "stat", "chart", "cta", "bullet", "caption", "quote", "feature", "dashboard", "comparison", "workflow", "before-after", "url-to-video", "prompt-to-video", "ai-studio", "timeline", "testimonial", "gallery", "logo", "product", "screenshot", "image", "photo", "graphic"]);
 const ASSET_KINDS = ["product", "screenshot", "image", "photo", "graphic"];
 
 // Read an image file → base64 data-URI (so the engine gets the asset via props, no file serving).

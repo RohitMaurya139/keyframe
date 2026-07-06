@@ -33,7 +33,7 @@ Return ONLY a JSON object — no prose, no markdown fences:
       "id": "s1",
       "start": 0,
       "duration": <seconds>,
-      "kind": "<title|hook|bullet|feature|dashboard|comparison|quote|caption|shape-motion|chart|countdown|cta>",
+      "kind": "<title|hook|bullet|feature|dashboard|comparison|workflow|url-to-video|prompt-to-video|ai-studio|timeline|testimonial|gallery|before-after|quote|caption|shape-motion|chart|countdown|cta>",
       "headline": "<short on-screen headline, ≤60 chars, or empty>",
       "subtext":  "<supporting line, ≤120 chars, or empty>",
       "paragraph": "<optional supporting sentence, ≤160 chars — body copy so the scene doesn't feel empty>",
@@ -89,6 +89,7 @@ The terminal scene's `animation` (`typewriter`) and `layout` must still differ f
 
 ## Writing principles
 
+- **You are a DIRECTOR selecting from a TEMPLATE LIBRARY — not laying out from scratch.** Choose the scene `kind` that best fits the beat, and the renderer applies a professionally-designed template. Map intent → kind: opening/brand → `hook`; capabilities → `feature`; analytics/product UI → `dashboard`; how-it-works / pipeline / steps → `workflow`; "turn a website into a video" → `url-to-video`; "generate from a prompt" → `prompt-to-video`; transformation or old-way-vs-new → `before-after`; us-vs-them → `comparison`; a hero metric → `stat`; closing → `cta`. Each rich kind fills the frame — prefer them over a bare `caption`.
 - **One idea per scene.** If a scene has two ideas, split it.
 - **Fill the frame (content density).** A scene must never be just a headline + subtitle. Give each scene body: set `paragraph` (a supporting sentence) on most scenes. Use the rich scene kinds to fill the frame like a premium SaaS launch (Linear/Vercel/Stripe): `kind: "feature"` (3–4 `{title, desc}` highlights + optional `metrics`) for a capabilities scene; `kind: "dashboard"` (a `paragraph` + `metrics` KPIs + `features` as dashboard rows) for a product/analytics moment; `kind: "comparison"` (`features` = the wins, `bullets` = the old-way pains, `kicker` = your product name, `subtext` = the old-way label, one `metrics` payoff) for a before/after or us-vs-them beat. Never leave large empty regions.
 - **Beats are the scene's inner choreography.** 2–4 per scene: the FIRST beat is always at 0–0.15 (something visible enters immediately — no empty-ground moments); middle beats land content (subtext, counters, accents); the LAST beat starts the exit no later than 0.6s before the scene ends. `at` is relative to the scene's own start and must be < the scene's duration.

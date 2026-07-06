@@ -5,37 +5,18 @@ import React from "react";
 import { Sequence } from "remotion";
 import type { Storyboard, Scene } from "./storyboard";
 import { deriveTheme, type Theme } from "./engine3d/core/theme";
-import { HookScene } from "./engine3d/scenes/HookScene";
-import { StatScene } from "./engine3d/scenes/StatScene";
-import { TextScene } from "./engine3d/scenes/TextScene";
-import { CtaScene } from "./engine3d/scenes/CtaScene";
-import { LogoRevealScene } from "./engine3d/scenes/LogoRevealScene";
-import { ImageHeroScene } from "./engine3d/scenes/ImageHeroScene";
-import { FeatureGridScene } from "./engine3d/scenes/FeatureGridScene";
-import { Feature3DScene } from "./engine3d/scenes/Feature3DScene";
-import { DashboardScene } from "./engine3d/scenes/DashboardScene";
-import { ComparisonScene } from "./engine3d/scenes/ComparisonScene";
 import { Watermark } from "./engine3d/components/Watermark";
 import { Transition, SEAM_CYCLE } from "./engine3d/transitions";
+import { componentForKind } from "./engine3d/templates/registry";
 
 const OVERLAP = 0.8; // seconds both scenes co-exist for the transition (spec: 0.8–1.5s)
 
 type SceneProps = { scene: Scene; theme: Theme; durationInFrames: number };
 
+// The scene's kind selects a TEMPLATE from the library (registry) — no scene is built from scratch.
 const SceneComponent: React.FC<SceneProps> = (props) => {
-  switch (props.scene.kind) {
-    case "hook": return <HookScene {...props} />;
-    case "stat": case "chart": return <StatScene {...props} />;
-    case "feature": return <Feature3DScene {...props} />;
-    case "feature-dom": return <FeatureGridScene {...props} />;
-    case "dashboard": return <DashboardScene {...props} />;
-    case "comparison": return <ComparisonScene {...props} />;
-    case "bullet": case "caption": case "quote": return <TextScene {...props} />;
-    case "cta": return <CtaScene {...props} />;
-    case "logo": return <LogoRevealScene {...props} />;
-    case "product": case "screenshot": case "image": case "photo": case "graphic": return <ImageHeroScene {...props} />;
-    default: return <HookScene {...props} />;
-  }
+  const Template = componentForKind(props.scene.kind);
+  return <Template {...props} />;
 };
 
 export const Video: React.FC<{ storyboard: Storyboard; fps: number }> = ({ storyboard, fps }) => {
