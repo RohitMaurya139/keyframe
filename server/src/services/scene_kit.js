@@ -990,6 +990,217 @@ function archWorkflow(scene, ctx) {
   return { html, script: s };
 }
 
+// TESTIMONIAL — the social-proof archetype: quote card(s) with a 5-star rating + attribution.
+// Multi-quote mode (features[] as {quote, author}) → a row/column of testimonial cards; single-
+// quote mode (headline = the quote) → one large centered quote card. Distinct (stars + quote
+// treatment) from the other archetypes. Lint: text(quote) + panel(card) + svg(stars + underline)
+// + glow = ≥4 layers (C1); cards/quote enter with `scale` (C2); underline strokeDashoffset (C4).
+function archTestimonial(scene, ctx) {
+  const { theme, id, T, L, track, dims } = ctx;
+  const land = dims.width >= dims.height;
+  const accentText = theme.gradients ? `background:linear-gradient(100deg,${theme.accent},${theme.accent2});-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:${theme.accent};` : `color:${theme.accent};`;
+
+  // 5-point star (16x16 viewBox), no emoji. Popped in via scale (transform-box so it scales centered).
+  const star = () => `<svg width="15" height="15" viewBox="0 0 16 16" style="display:block;transform-box:fill-box;transform-origin:center center;"><polygon points="8,1 9.9,5.6 15,6 11,9.4 12.2,14.5 8,11.8 3.8,14.5 5,9.4 1,6 6.1,5.6" fill="${theme.accent}"/></svg>`;
+  const stars = () => `<div class="kfstars" style="display:flex;gap:3px;">${star() + star() + star() + star() + star()}</div>`;
+
+  const feats = Array.isArray(scene.features) ? scene.features.filter((f) => f && (f.title || f.desc)) : [];
+  const multi = feats.length >= 2;
+  const kicker = ctx.kicker || scene.kicker || "Loved by teams";
+  const cardChrome = theme.gradients
+    ? `background:${theme.panel};border:1px solid ${theme.line};box-shadow:0 16px 40px rgba(0,0,0,0.30);`
+    : `background:${theme.panel};border:2px solid ${theme.ink};box-shadow:5px 5px 0 ${theme.accent};`;
+  const lineW = land ? 240 : 150;
+
+  let bodyHtml;
+  if (multi) {
+    const list = feats.slice(0, land ? 3 : 2);
+    const qf = land ? 22 : 19;
+    bodyHtml = `<div style="display:flex;flex-direction:${land ? "row" : "column"};align-items:stretch;justify-content:center;gap:${land ? 16 : 12}px;width:100%;">${list.map((c) => {
+      const quote = String(c.title || c.desc || "").slice(0, 130);
+      const author = c.title ? String(c.desc || "").slice(0, 40) : "";
+      return `<div class="card kfquote" style="opacity:0;flex:1;${cardChrome}border-radius:16px;padding:${land ? "22px 24px" : "16px 18px"};display:flex;flex-direction:column;gap:12px;">
+        ${stars()}
+        <div style="font:600 ${qf}px/1.42 ${cssFont(theme)};color:${theme.ink};">${esc(quote)}</div>
+        ${author ? `<div style="font:600 ${Math.round(qf * 0.72)}px/1.2 ${cssFont(theme)};color:${theme.accent};margin-top:auto;">— ${esc(author)}</div>` : ""}
+      </div>`;
+    }).join("")}</div>`;
+  } else {
+    const author = String(scene.subtext || scene.kicker || "").replace(/^[—-]\s*/, "").slice(0, 50);
+    const qbig = land ? 50 : 38;
+    bodyHtml = `<div class="card kfquote" style="opacity:0;${cardChrome}border-radius:20px;padding:${land ? "38px 46px" : "26px 22px"};display:flex;flex-direction:column;align-items:center;gap:18px;max-width:${land ? "72%" : "94%"};text-align:center;">
+      ${stars()}
+      <blockquote class="kfhead" style="margin:0;font:700 ${qbig}px/1.28 ${cssHead(theme)};color:${theme.ink};letter-spacing:-0.01em;"><style>#${id} .kfacc{${accentText}}</style>${headlineSpans(scene.headline || "Teams love it", scene.emphasis, theme)}</blockquote>
+      ${author ? `<div style="font:700 ${Math.round(qbig * 0.36)}px/1.2 ${cssFont(theme)};color:${theme.accent};">— ${esc(author)}</div>` : ""}
+    </div>`;
+  }
+
+  const glow = theme.gradients
+    ? `<div id="${id}g" class="clip" data-layout-allow-occlusion style="position:absolute;left:50%;top:50%;width:56%;height:60%;transform:translate(-50%,-50%);border-radius:50%;filter:blur(64px);background:radial-gradient(circle,${rgba(theme.accent, 0.18)},transparent 66%);opacity:0;"></div>`
+    : "";
+
+  const html = `<div id="${id}" class="clip" data-start="${T}" data-duration="${ctx.clipDur}" data-track-index="${track}" style="opacity:0;perspective:1400px;display:flex;align-items:center;justify-content:center;">
+  ${glow}
+  <div class="kfstage" style="display:flex;flex-direction:column;align-items:center;gap:${land ? 20 : 15}px;width:100%;padding:0 ${land ? "7%" : "6%"};transform-style:preserve-3d;text-align:center;">
+    <span id="${id}kick" class="kicker" style="opacity:0;display:inline-flex;align-items:center;gap:9px;padding:7px 15px;border-radius:9999px;background:${theme.panel};border:1px solid ${theme.line};color:${theme.accent};font:700 13px/1 ${cssFont(theme)};letter-spacing:.2em;text-transform:uppercase;"><span style="width:7px;height:7px;border-radius:50%;background:${theme.accent};"></span>${esc(kicker)}</span>
+    <svg id="${id}lnwrap" width="${lineW}" height="6" viewBox="0 0 ${lineW} 6" style="display:block;"><line id="${id}ln" x1="0" y1="3" x2="${lineW}" y2="3" stroke="${theme.accent}" stroke-width="5" stroke-linecap="round" stroke-dasharray="${lineW}" stroke-dashoffset="${lineW}"></line></svg>
+    ${bodyHtml}
+  </div>
+</div>`;
+
+  const { headAt, exitAt } = ctx.timing, end = ctx.clipEnd;
+  const kAt = r(Math.max(T + 0.05, headAt - 0.2));
+  const lnAt = r(headAt + 0.3), bodyAt = r(headAt + 0.5), starsAt = r(headAt + 0.7);
+  const s = [
+    `tl.set("#${id}",{opacity:1},${T});`,
+    `cam3Dz("#${id} .kfstage",${T},${r(ctx.clipDur)},1.0,1.05,"50% 45%");`,
+    glow ? `tl.fromTo("#${id}g",{opacity:0,scale:0.85},{opacity:1,scale:1,duration:0.8,ease:"power2.out"},${kAt});` : "",
+    `tl.fromTo("#${id}kick",{opacity:0,y:-10},{opacity:1,y:0,duration:0.45,ease:"power2.out"},${kAt});`,
+    `tl.fromTo("#${id}ln",{strokeDashoffset:${lineW}},{strokeDashoffset:0,duration:0.6,ease:"power2.inOut"},${lnAt});`,
+    // Cards/quote enter with `scale` (the C2 camera signal).
+    `tl.fromTo("#${id} .kfquote",{opacity:0,y:22,scale:0.96},{opacity:1,y:0,scale:1,duration:0.55,stagger:0.12,ease:"back.out(1.3)"},${bodyAt});`,
+    // Stars pop in a stagger.
+    `tl.fromTo("#${id} .kfstars svg",{scale:0},{scale:1,duration:0.35,stagger:0.05,ease:"back.out(2)"},${starsAt});`,
+    `xout("#${id}",${exitAt},${end},"${ctx.trans}");`,
+  ].filter(Boolean).join("\n");
+  return { html, script: s };
+}
+
+// TIMELINE — the roadmap / narrative-timeline archetype: header + a drawn horizontal axis (or
+// vertical on portrait) with evenly-spaced event dots, each carrying a label card (order badge +
+// title + one-line desc). Chronological, distinct from workflow's step-arrows. Events ← features[]
+// (or bullets). Lint: text + panel(cards) + svg(axis) + glow = ≥4 layers (C1); cards enter with
+// `scale` (C2); axis strokeDashoffset draw = reactive beat (C4).
+function archTimeline(scene, ctx) {
+  const { theme, id, T, L, track, dims } = ctx;
+  const land = dims.width >= dims.height;
+  const big = land ? 46 : 38;
+  const accentText = theme.gradients ? `background:linear-gradient(100deg,${theme.accent},${theme.accent2});-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:${theme.accent};` : `color:${theme.accent};`;
+  const maxEv = land ? 5 : 4;
+
+  let events = Array.isArray(scene.features) ? scene.features.filter((f) => f && (f.title || f.desc)).map((f) => ({ title: String(f.title || f.desc || "").slice(0, 24), desc: String(f.title ? (f.desc || "") : "").slice(0, 48) })) : [];
+  if (events.length < 2 && Array.isArray(scene.bullets)) events = scene.bullets.filter(Boolean).map((b) => ({ title: String(b).slice(0, 24), desc: "" }));
+  if (!events.length) events = [{ title: "Milestone", desc: "" }];
+  events = events.slice(0, maxEv);
+  const kicker = ctx.kicker || scene.kicker || scene.emphasis || "Timeline";
+  const cardChrome = theme.gradients
+    ? `background:${theme.panel};border:1px solid ${theme.line};box-shadow:0 12px 30px rgba(0,0,0,0.26);`
+    : `background:${theme.panel};border:2px solid ${theme.ink};box-shadow:4px 4px 0 ${theme.accent};`;
+  const lineW = land ? 240 : 150;
+
+  const evCard = (e, i) => `<div class="card kftl" style="opacity:0;${cardChrome}border-radius:14px;padding:${land ? "13px 14px" : "10px 12px"};display:flex;flex-direction:column;gap:6px;width:100%;text-align:center;">
+      <span style="align-self:center;width:26px;height:26px;border-radius:50%;background:${rgba(theme.accent, 0.16)};color:${theme.accent};font:800 ${land ? 14 : 12}px/26px ${cssFont(theme)};text-align:center;">${i + 1}</span>
+      <div style="font:800 ${land ? 17 : 15}px/1.2 ${cssHead(theme)};color:${theme.ink};">${esc(e.title)}</div>
+      ${e.desc ? `<div style="font:500 ${land ? 13 : 12}px/1.3 ${cssFont(theme)};color:${theme.dim};">${esc(e.desc)}</div>` : ""}
+    </div>`;
+  const dot = `<div class="kftldot" style="flex:none;width:15px;height:15px;border-radius:50%;background:${theme.accent};border:3px solid ${theme.ground};position:relative;z-index:1;"></div>`;
+
+  let bodyHtml;
+  if (land) {
+    const cols = events.map((e, i) => `<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:14px;">${evCard(e, i)}${dot}</div>`).join("");
+    bodyHtml = `<div style="position:relative;display:flex;flex-direction:row;align-items:flex-end;justify-content:space-between;gap:14px;width:100%;">
+      <svg style="position:absolute;left:1%;right:1%;bottom:6px;width:98%;height:6px;overflow:visible;" preserveAspectRatio="none" viewBox="0 0 100 6"><line id="${id}axis" x1="0" y1="3" x2="100" y2="3" stroke="${rgba(theme.accent, 0.5)}" stroke-width="1.4" stroke-dasharray="100" stroke-dashoffset="100" vector-effect="non-scaling-stroke"></line></svg>
+      ${cols}
+    </div>`;
+  } else {
+    const rows = events.map((e, i) => `<div style="display:flex;flex-direction:row;align-items:center;gap:14px;width:100%;">${dot}<div style="flex:1;min-width:0;">${evCard(e, i)}</div></div>`).join("");
+    bodyHtml = `<div style="position:relative;display:flex;flex-direction:column;align-items:stretch;gap:12px;width:100%;padding-left:2px;">
+      <svg style="position:absolute;left:7px;top:8px;bottom:8px;width:6px;height:auto;overflow:visible;" preserveAspectRatio="none" viewBox="0 0 6 100"><line id="${id}axis" x1="3" y1="0" x2="3" y2="100" stroke="${rgba(theme.accent, 0.5)}" stroke-width="1.4" stroke-dasharray="100" stroke-dashoffset="100" vector-effect="non-scaling-stroke"></line></svg>
+      ${rows}
+    </div>`;
+  }
+
+  const glow = theme.gradients
+    ? `<div id="${id}g" class="clip" data-layout-allow-occlusion style="position:absolute;left:50%;top:56%;width:54%;height:52%;transform:translate(-50%,-50%);border-radius:50%;filter:blur(60px);background:radial-gradient(circle,${rgba(theme.accent, 0.18)},transparent 66%);opacity:0;"></div>`
+    : "";
+
+  const html = `<div id="${id}" class="clip" data-start="${T}" data-duration="${ctx.clipDur}" data-track-index="${track}" style="opacity:0;perspective:1400px;display:flex;align-items:center;justify-content:center;">
+  ${glow}
+  <div class="kfstage" style="display:flex;flex-direction:column;align-items:center;gap:${land ? 22 : 16}px;width:100%;padding:0 ${land ? "7%" : "6%"};transform-style:preserve-3d;">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;">
+      <span id="${id}kick" class="kicker" style="opacity:0;display:inline-flex;align-items:center;gap:9px;padding:7px 15px;border-radius:9999px;background:${theme.panel};border:1px solid ${theme.line};color:${theme.accent};font:700 13px/1 ${cssFont(theme)};letter-spacing:.2em;text-transform:uppercase;"><span style="width:7px;height:7px;border-radius:50%;background:${theme.accent};"></span>${esc(kicker)}</span>
+      <h2 class="kfhead" style="font:800 ${big}px/1.05 ${cssHead(theme)};letter-spacing:-0.02em;color:${theme.ink};max-width:22ch;"><style>#${id} .kfacc{${accentText}}</style>${headlineSpans(scene.headline, scene.emphasis, theme)}</h2>
+    </div>
+    ${bodyHtml}
+  </div>
+</div>`;
+
+  const { headAt, exitAt } = ctx.timing, end = ctx.clipEnd;
+  const kAt = r(Math.max(T + 0.05, headAt - 0.2));
+  const axAt = r(headAt + 0.4), cardsAt = r(headAt + 0.55), dotsAt = r(headAt + 0.8);
+  const s = [
+    `tl.set("#${id}",{opacity:1},${T});`,
+    `cam3Dz("#${id} .kfstage",${T},${r(ctx.clipDur)},1.0,1.05,"50% 40%");`,
+    glow ? `tl.fromTo("#${id}g",{opacity:0,scale:0.85},{opacity:1,scale:1,duration:0.8,ease:"power2.out"},${kAt});` : "",
+    `tl.fromTo("#${id}kick",{opacity:0,y:-10},{opacity:1,y:0,duration:0.45,ease:"power2.out"},${kAt});`,
+    `reveal("${id}",${headAt},"${ctx.mode}",0.06);`,
+    `tl.fromTo("#${id}axis",{strokeDashoffset:100},{strokeDashoffset:0,duration:0.7,ease:"power2.inOut"},${axAt});`,
+    `tl.fromTo("#${id} .kftl",{opacity:0,y:18,scale:0.96},{opacity:1,y:0,scale:1,duration:0.5,stagger:0.12,ease:"power2.out"},${cardsAt});`,
+    `tl.fromTo("#${id} .kftldot",{scale:0},{scale:1,duration:0.35,stagger:0.12,ease:"back.out(2)"},${dotsAt});`,
+    `xout("#${id}",${exitAt},${end},"${ctx.trans}");`,
+  ].filter(Boolean).join("\n");
+  return { html, script: s };
+}
+
+// GALLERY — the showcase / "made with" archetype: header + a mosaic of thumbnail TILES (each a
+// gradient "video" thumbnail with a play glyph + caption). Distinct (image-tile mosaic) from the
+// feature grid's title+desc cards. Tiles ← features[]/bullets. Lint: text + panel(tiles) +
+// svg(play/underline) + glow = ≥4 layers (C1); tiles enter with `scale` (C2); underline draw (C4).
+function archGallery(scene, ctx) {
+  const { theme, id, T, L, track, dims } = ctx;
+  const land = dims.width >= dims.height;
+  const big = land ? 46 : 38;
+  const accentText = theme.gradients ? `background:linear-gradient(100deg,${theme.accent},${theme.accent2});-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:${theme.accent};` : `color:${theme.accent};`;
+
+  let items = Array.isArray(scene.features) ? scene.features.filter((f) => f && (f.title || f.desc)).map((f) => String(f.title || f.desc)) : [];
+  if (items.length < 2 && Array.isArray(scene.bullets)) items = scene.bullets.filter(Boolean).map(String);
+  if (!items.length) items = ["Product launch", "Feature demo", "Explainer"];
+  const maxT = land ? 6 : 4;
+  items = items.slice(0, maxT).map((t) => t.slice(0, 28));
+  const kicker = ctx.kicker || scene.kicker || "Showcase";
+  const cols = !land ? (items.length >= 4 ? 2 : 1) : (items.length <= 4 ? 2 : 3);
+  const lineW = land ? 240 : 150;
+
+  const play = `<svg width="34" height="34" viewBox="0 0 34 34" style="display:block;"><circle cx="17" cy="17" r="16" fill="${rgba(theme.accent, 0.18)}" stroke="${rgba(theme.accent, 0.5)}" stroke-width="1.5"></circle><polygon points="13,10 25,17 13,24" fill="${theme.accent}"></polygon></svg>`;
+
+  const tiles = items.map((t) => `<div class="card kftile" style="opacity:0;border-radius:14px;overflow:hidden;border:1px solid ${theme.line};display:flex;flex-direction:column;box-shadow:0 12px 30px rgba(0,0,0,0.24);">
+      <div style="position:relative;aspect-ratio:16/10;background:linear-gradient(135deg,${rgba(theme.accent, 0.42)},${theme.panel});display:flex;align-items:center;justify-content:center;">${play}</div>
+      <div style="padding:${land ? "12px 14px" : "10px 12px"};font:700 ${land ? 16 : 14}px/1.2 ${cssFont(theme)};color:${theme.ink};background:${theme.panel};">${esc(t)}</div>
+    </div>`).join("");
+
+  const glow = theme.gradients
+    ? `<div id="${id}g" class="clip" data-layout-allow-occlusion style="position:absolute;left:50%;top:52%;width:58%;height:56%;transform:translate(-50%,-50%);border-radius:50%;filter:blur(64px);background:radial-gradient(circle,${rgba(theme.accent, 0.16)},transparent 66%);opacity:0;"></div>`
+    : "";
+
+  const html = `<div id="${id}" class="clip" data-start="${T}" data-duration="${ctx.clipDur}" data-track-index="${track}" style="opacity:0;perspective:1400px;display:flex;align-items:center;justify-content:center;">
+  ${glow}
+  <div class="kfstage" style="display:flex;flex-direction:column;align-items:center;gap:${land ? 20 : 15}px;width:100%;padding:0 ${land ? "7%" : "6%"};transform-style:preserve-3d;">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;">
+      <span id="${id}kick" class="kicker" style="opacity:0;display:inline-flex;align-items:center;gap:9px;padding:7px 15px;border-radius:9999px;background:${theme.panel};border:1px solid ${theme.line};color:${theme.accent};font:700 13px/1 ${cssFont(theme)};letter-spacing:.2em;text-transform:uppercase;"><span style="width:7px;height:7px;border-radius:50%;background:${theme.accent};"></span>${esc(kicker)}</span>
+      <h2 class="kfhead" style="font:800 ${big}px/1.05 ${cssHead(theme)};letter-spacing:-0.02em;color:${theme.ink};max-width:22ch;"><style>#${id} .kfacc{${accentText}}</style>${headlineSpans(scene.headline, scene.emphasis, theme)}</h2>
+      <svg id="${id}lnwrap" width="${lineW}" height="6" viewBox="0 0 ${lineW} 6" style="display:block;"><line id="${id}ln" x1="0" y1="3" x2="${lineW}" y2="3" stroke="${theme.accent}" stroke-width="5" stroke-linecap="round" stroke-dasharray="${lineW}" stroke-dashoffset="${lineW}"></line></svg>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(${cols},1fr);gap:${land ? 16 : 12}px;width:100%;">${tiles}</div>
+  </div>
+</div>`;
+
+  const { headAt, exitAt } = ctx.timing, end = ctx.clipEnd;
+  const kAt = r(Math.max(T + 0.05, headAt - 0.2));
+  const lnAt = r(headAt + 0.35), tilesAt = r(headAt + 0.55), driftAt = r(headAt + 1.3);
+  const s = [
+    `tl.set("#${id}",{opacity:1},${T});`,
+    `cam3Dz("#${id} .kfstage",${T},${r(ctx.clipDur)},1.0,1.05,"50% 45%");`,
+    glow ? `tl.fromTo("#${id}g",{opacity:0,scale:0.85},{opacity:1,scale:1,duration:0.8,ease:"power2.out"},${kAt});` : "",
+    `tl.fromTo("#${id}kick",{opacity:0,y:-10},{opacity:1,y:0,duration:0.45,ease:"power2.out"},${kAt});`,
+    `reveal("${id}",${headAt},"${ctx.mode}",0.06);`,
+    `tl.fromTo("#${id}ln",{strokeDashoffset:${lineW}},{strokeDashoffset:0,duration:0.6,ease:"power2.inOut"},${lnAt});`,
+    `tl.fromTo("#${id} .kftile",{opacity:0,y:22,scale:0.94},{opacity:1,y:0,scale:1,duration:0.55,stagger:0.09,ease:"back.out(1.3)"},${tilesAt});`,
+    L - 2 > 0.6 ? `tl.to("#${id} .kftile",{y:"-=6",duration:1.6,ease:"sine.inOut",yoyo:true,repeat:sreps(${r(L - 2)},1.6),stagger:0.1},${driftAt});` : "",
+    `xout("#${id}",${exitAt},${end},"${ctx.trans}");`,
+  ].filter(Boolean).join("\n");
+  return { html, script: s };
+}
+
 // Partition the fetched assets into the kinds the kit places differently:
 // website screenshots (device-framed hero), vectors/illustrations (drawn-in side
 // art or grids), and photos (scrimmed full-bleed). Paths are relative to jobDir.
@@ -1377,6 +1588,12 @@ function archetypeFor(scene, idx, total) {
   if (k === "dashboard") return archDashboard;
   // How-it-works / pipeline / process → a numbered step sequence with drawing connectors.
   if (k === "workflow") return archWorkflow;
+  // Social proof → quote card(s) with a star rating + attribution.
+  if (k === "testimonial" || k === "quote") return archTestimonial;
+  // Roadmap / narrative timeline → a drawn axis of labeled event dots.
+  if (k === "timeline") return archTimeline;
+  // Showcase / "made with" → a mosaic of captioned thumbnail tiles.
+  if (k === "gallery") return archGallery;
   // Rich card content: a "feature" scene, or ANY scene carrying features[] (the storyboard LLM
   // authors these on feature/dashboard/comparison beats) → the dense feature-grid instead of a
   // flat text scene. This renders the features[]/metrics[]/paragraph archText silently dropped.
@@ -1467,7 +1684,7 @@ function buildComposition({ storyboard, dims, framePack, assets, captionCues } =
   // because the film happens to carry a real asset somewhere. So a rich scene is hostable ONLY when
   // it has its OWN bound REAL asset (a screenshot/product fetched FOR this scene) worth showing
   // instead of the cards. Bare text scenes (archText) still host anything, exactly as before.
-  const isRich = (b) => b === archFeatureGrid || b === archComparison || b === archDashboard || b === archWorkflow;
+  const isRich = (b) => b === archFeatureGrid || b === archComparison || b === archDashboard || b === archWorkflow || b === archTestimonial || b === archTimeline || b === archGallery;
   const boundRealFor = (sid) => [...pools.screenshots, ...pools.photos, ...pools.vectors].some((a) => a && a.sceneId === sid && isRealSrc(a));
   const canHost = (p) => p.isContent && p.build !== archTerminal
     && (isRich(p.build) ? boundRealFor(p.scene.id) : (p.build === archText || hasRealForeground));
