@@ -32,12 +32,14 @@ async function imageFitsTopic({ imageUrl, imagePath, topic, query, tracker, stri
       `or metaphor-literal image (a flower for "growth", a suitcase for "blog posts", a stranger's ` +
       `portrait for an AI tool) must be REJECTED — a motif vector will be used instead, which is ` +
       `better than an off-topic photo. Only a directly on-subject image passes. When in doubt, REJECT.\n` +
+      `Also REJECT if a watermark, stock-agency logo, or a URL/text overlay is stamped across the image.\n` +
       `Reply exactly: {"fit": true|false, "reason": "<=6 words"}`
     : `Video subject: "${String(topic).slice(0, 300)}".\n` +
       `This image is a candidate for a scene about "${query}".\n` +
       `Reject ONLY if the image is clearly irrelevant, absurd, or misleading for the subject ` +
       `(e.g. a suitcase for a writing app, a random portrait for a deploy tool). A reasonable, ` +
       `on-theme image — even if generic — should PASS. When in doubt, keep it.\n` +
+      `But REJECT any image with a visible watermark, stock-agency logo, or URL/text overlay stamped across it.\n` +
       `Reply exactly: {"fit": true|false, "reason": "<=6 words"}`;
   try {
     const { text, tokensIn, tokensOut } = await llm.chat({

@@ -230,6 +230,26 @@ function build() {
   // for real WebGL 3D motion behind the content. Disable via ASSET_THREE_D=0.
   if (process.env.ASSET_THREE_D != null) cfg.assets.threeD = boolEnv(process.env.ASSET_THREE_D);
   else if (cfg.assets.threeD == null) cfg.assets.threeD = true;
+  // Asset QUALITY gates (Phase 2 — all ffmpeg/ffprobe, no `sharp`). Reject thumbnails,
+  // extreme slivers, and perceptual near-duplicates. Override via config.json {"assets":{...}}
+  // or env. bgFloorRatio scales the background floor to the render target (0.55 * longer edge,
+  // capped at minResolutionBg). dedupeHamming = dHash bit-distance under which two rasters count
+  // as the same shot (0-64; ~10 is the near-duplicate band).
+  const numEnv = (v) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
+  if (process.env.ASSET_MIN_RES_BG != null) cfg.assets.minResolutionBg = numEnv(process.env.ASSET_MIN_RES_BG);
+  if (cfg.assets.minResolutionBg == null) cfg.assets.minResolutionBg = 1000;
+  if (process.env.ASSET_MIN_RES_INSET != null) cfg.assets.minResolutionInset = numEnv(process.env.ASSET_MIN_RES_INSET);
+  if (cfg.assets.minResolutionInset == null) cfg.assets.minResolutionInset = 320;
+  if (process.env.ASSET_BG_FLOOR_RATIO != null) cfg.assets.bgFloorRatio = numEnv(process.env.ASSET_BG_FLOOR_RATIO);
+  if (cfg.assets.bgFloorRatio == null) cfg.assets.bgFloorRatio = 0.55;
+  if (process.env.ASSET_MAX_ASPECT != null) cfg.assets.maxAspectRatio = numEnv(process.env.ASSET_MAX_ASPECT);
+  if (cfg.assets.maxAspectRatio == null) cfg.assets.maxAspectRatio = 2.6;
+  if (process.env.ASSET_DEDUPE_HAMMING != null) cfg.assets.dedupeHamming = numEnv(process.env.ASSET_DEDUPE_HAMMING);
+  if (cfg.assets.dedupeHamming == null) cfg.assets.dedupeHamming = 10;
+  // iconify (ON by default) — fetch real ICONS from Iconify (keyless) for icon/vector needs
+  // as pack-accent-colored PNGs, instead of degrading to an off-topic photo. Disable via ASSET_ICONIFY=0.
+  if (process.env.ASSET_ICONIFY != null) cfg.assets.iconify = boolEnv(process.env.ASSET_ICONIFY);
+  else if (cfg.assets.iconify == null) cfg.assets.iconify = true;
 
   // Render engine. "scenekit" (default — HyperFrames CSS/GSAP scene-kit) or "three"
   // (Remotion + React-Three-Fiber pipeline in engine3d-spike/). With RENDER_ENGINE=three,

@@ -24,6 +24,8 @@ const { generateStoryboard } = require("../services/storyboard");
 const frameRegistry = require("../services/frame_registry");
 const { withBudget, attemptLlmComposition, mixAudioIntoVideo, fallbackQueriesFor } = require("../services/pipeline");
 const { acquire, hasProviderFor } = require("../services/asset_sources");
+const { topicAnchor, buildVisionTopic, kindPrefFor } = require("../services/asset_context");
+const { deriveTheme } = require("../services/scene_kit");
 const { synthesizeFitted } = require("../services/vo_fit");
 const { buildCues, writeSrt } = require("../services/captions");
 const { fetchMusic } = require("../services/audio_sources");
@@ -275,28 +277,8 @@ async function assetPlannerAgent(s) {
 }
 
 // Asset Search — executes the plan: our database first, then providers.
-// Stopwords for the topical anchor — drop the brand name and generic filler so
-// the anchor is the SUBJECT (beauty, cosmetics), not "bulkdoor"/"marketplace".
-const ANCHOR_STOP = new Set([
-  "the", "and", "for", "with", "your", "our", "that", "this", "from", "into",
-  "india", "indias", "best", "top", "leading", "number", "online", "platform",
-  "marketplace", "website", "company", "brand", "brands", "business", "solution",
-  "solutions", "service", "services", "app", "get", "now", "more", "all", "new",
-  "buy", "shop", "store", "official", "home", "page", "welcome", "trusted",
-]);
-
-// 1-2 SUBJECT words distilled from the brief/site, used to keep derived stock
-// queries on-topic. Without this, abstract scene directions ("scalable growth")
-// fetched wildly off-topic stock (trading charts, a car logo) because the query
-// never carried what the video is actually about.
-function topicAnchor(job, brief) {
-  const src = `${(brief?.keyMessages || []).join(" ")} ${brief?.audience || ""} ${brief?.goal || ""}`.toLowerCase();
-  const freq = {};
-  for (const w of src.match(/[a-z]{4,}/g) || []) {
-    if (!ANCHOR_STOP.has(w)) freq[w] = (freq[w] || 0) + 1;
-  }
-  return Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 2).map((x) => x[0]).join(" ");
-}
+// topicAnchor / buildVisionTopic / kindPrefFor live in services/asset_context.js
+// (shared with the script-checkpoint pipeline so grounding can't drift).
 
 // Pin the user's OWN uploaded assets (logos, product/company photos, graphics) as
 // the HIGHEST-priority real material — copied into the job dir and tagged
@@ -352,8 +334,10 @@ async function assetSearchAgent(s) {
   const { job, jobDir, tracker, assetPlan } = s;
   const anchor = topicAnchor(job, s.brief);
   // A concise subject sentence for the VISION relevance gate (what the video is about).
-  const visionTopic = [s.brief?.improvedPrompt, job.website_title, (s.brief?.keyMessages || []).slice(0, 2).join("; ")]
-    .filter(Boolean).join(" — ").slice(0, 300) || job.prompt || "";
+  const visionTopic = buildVisionTopic(s.brief, job);
+  // Contrast-safe, brand-aware accent for Iconify icons (same derivation the renderer uses).
+  let iconColor = null;
+  try { iconColor = deriveTheme(job.frame_pack, { brandColors: s.brief?.brandColors }).accent; } catch { /* default in acquire */ }
   if (anchor) console.log(`[agents] asset_search topic anchor: "${anchor}"`);
   db.setProgress(job.id, "assets");
   fs.mkdirSync(path.join(jobDir, "assets", "images"), { recursive: true });
@@ -384,20 +368,12 @@ async function assetSearchAgent(s) {
     };
   }).filter(Boolean);
 
-  // Map a scene's asset role to the kind of curated asset that fits it:
-  // full-bleed backgrounds want real photos; insets/icons/textures want
-  // vectors or illustrations. Threaded into acquire() -> curated.search.
-  const kindPrefFor = (role) => {
-    const r = String(role || "").toLowerCase();
-    if (r === "background" || r === "fullscreen") return "photo";
-    if (r === "icon" || r === "texture") return "vector";
-    if (r === "inset") return "illustration";
-    return undefined;
-  };
+  // kindPrefFor (role -> curated asset shape) is imported from asset_context.js.
 
   // Sequential so each curated pick can exclude the library files already
   // chosen for earlier scenes — no single film reuses the same file twice.
   const usedLibraryIds = new Set();
+  const usedHashes = new Set(); // perceptual hashes chosen this film → no near-duplicate reuse
   let iImg = 0, iVid = 0;
   const results = [];
   for (const { scene, need } of assetPlan.searches) {
@@ -418,14 +394,17 @@ async function assetSearchAgent(s) {
       query, fallbackQueries: [need.query, ...fallbackQueriesFor(query)], type: isVideo ? "video" : "image",
       orientation: job.orientation, outputPath: path.join(jobDir, relPath), tracker,
       kindPref: isVideo ? undefined : (isIcon ? "vector" : kindPrefFor(need.role)),
-      excludeIds: usedLibraryIds, visionTopic,
+      excludeIds: usedLibraryIds, excludeHashes: usedHashes,
+      target: { targetW: job.width, targetH: job.height }, visionTopic, iconColor,
     }).catch(() => null);
     if (!r) continue;
     if (r.libraryId) usedLibraryIds.add(r.libraryId);
+    if (r.phash) usedHashes.add(r.phash);
     results.push({
       path: path.relative(jobDir, r.path).split(path.sep).join("/"), type: isVideo ? "video" : "image",
       sceneId: scene.id, startSec: scene.start, durationSec: scene.duration,
-      style: need.role === "inset" ? "inset" : "background", alt: need.query,
+      // Honor an asset's own role (Iconify returns style:"icon" → contained vectors pool).
+      style: r.style || (need.role === "inset" ? "inset" : "background"), alt: need.query,
       license: r.license, sourceUrl: r.sourceUrl, source: r.source, fromCache: r.fromCache === true,
     });
   }

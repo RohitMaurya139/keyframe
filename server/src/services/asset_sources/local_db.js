@@ -82,11 +82,11 @@ function materialize(entry, outputPath) {
   entry.hits = (entry.hits || 0) + 1;
   persist();
   console.log(`[asset_db] cache HIT "${entry.query}" (${entry.type}, ${entry.source}) -> ${path.basename(outputPath)}`);
-  return { license: entry.license, sourceUrl: entry.sourceUrl, source: `cache:${entry.source}`, width: entry.width, height: entry.height };
+  return { license: entry.license, sourceUrl: entry.sourceUrl, source: `cache:${entry.source}`, width: entry.width, height: entry.height, phash: entry.phash || null, hasAlpha: entry.hasAlpha || false };
 }
 
 // Register a freshly downloaded asset: copy into the cache and index it.
-function register({ filePath, query, type, orientation, source, license, sourceUrl, width, height, tags }) {
+function register({ filePath, query, type, orientation, source, license, sourceUrl, width, height, tags, phash, hasAlpha }) {
   try {
     const idx = load();
     fs.mkdirSync(FILES_DIR, { recursive: true });
@@ -103,6 +103,8 @@ function register({ filePath, query, type, orientation, source, license, sourceU
       tagWords: tags ? tokenize(tags) : [],
       source, license: license || "unknown", sourceUrl: sourceUrl || null,
       width: width || null, height: height || null,
+      // phash = perceptual dHash (near-duplicate detection); hasAlpha = measured transparency.
+      phash: phash || null, hasAlpha: hasAlpha || false,
       file: dest, bytes: fs.statSync(dest).size, addedAt: Date.now(), hits: 0,
     });
     persist();

@@ -30,6 +30,8 @@ const { VALID_VOICES } = require("./audio_planner");
 const { render } = require("./renderer");
 const { withBudget, attemptLlmComposition, mixAudioIntoVideo, fallbackQueriesFor } = require("./pipeline");
 const { acquire, hasProviderFor } = require("./asset_sources");
+const { topicAnchor, buildVisionTopic, kindPrefFor } = require("./asset_context");
+const { deriveTheme } = require("./scene_kit");
 
 function jobDirFor(jobId) { return path.join(config.paths.jobsDir, jobId); }
 function ms() { return Date.now(); }
@@ -219,6 +221,17 @@ function screenshotAssets({ job, script, jobDir }) {
 async function acquireScriptAssets({ job, script, jobDir, orientation, tracker }) {
   const pinned = screenshotAssets({ job, script, jobDir });
 
+  // Grounding: the SUBJECT anchor keeps derived queries on-topic, and visionTopic
+  // turns on the vision relevance gate for this flow (it was silently off — the gate
+  // only runs when a caller passes visionTopic). Mirrors agents/graph.js assetSearch.
+  const anchor = topicAnchor(job, job.brief);
+  const visionTopic = buildVisionTopic(job.brief, job);
+  // Icons are fetched from Iconify as a contrast-safe, brand-aware accent-colored PNG. Reuse the
+  // renderer's own theme derivation so the color is exactly what the video will use.
+  let iconColor = null;
+  try { iconColor = deriveTheme(job.frame_pack, { brandColors: job.brief?.brandColors }).accent; } catch { /* default in acquire */ }
+  if (anchor) console.log(`[project] asset topic anchor: "${anchor}"`);
+
   const wanted = [];
   const videoOk = hasProviderFor("video");
   const screenshotScenes = new Set(pinned.map((a) => a.sceneId));
@@ -245,32 +258,56 @@ async function acquireScriptAssets({ job, script, jobDir, orientation, tracker }
   fs.mkdirSync(path.join(jobDir, "assets", "images"), { recursive: true });
   fs.mkdirSync(path.join(jobDir, "assets", "videos"), { recursive: true });
 
+  // Sequential (not Promise.all) so each curated-library pick can exclude the files
+  // already chosen for earlier scenes via excludeIds — no single film reuses the same
+  // file twice, which is the fix for "every scene shows the same image". Overlaps with
+  // the storyboard LLM call (assetsTask starts before the storyboard await).
+  const usedLibraryIds = new Set();
+  const usedHashes = new Set(); // perceptual hashes chosen this film → no near-duplicate reuse
+  const target = { targetW: job.width, targetH: job.height };
   let iImg = 0, iVid = 0;
-  const tasks = picks.map(({ scene, need }) => {
+  const got = [];
+  for (const { scene, need } of picks) {
     const isVideo = need.type === "video";
     const relPath = isVideo ? `assets/videos/${iVid++}.mp4` : `assets/images/${iImg++}.jpg`;
-    const query = need.type === "icon" ? `${need.query} icon flat` : need.query;
-    return acquire({
+    // Icons/textures keep their concrete query; photo/background queries are anchored to
+    // the video subject so a derived direction like "scalable growth" becomes "fintech
+    // scalable growth" — on-topic stock instead of trading charts. The plain need.query is
+    // kept as a fallback so an over-narrow anchor still finds SOMETHING. Mirrors graph.js.
+    const isIcon = need.type === "icon" || ["icon", "texture"].includes(String(need.role || "").toLowerCase());
+    const query = (!isIcon && anchor) ? `${anchor} ${need.query}` : need.query;
+    const r = await acquire({
       query,
-      fallbackQueries: fallbackQueriesFor(query),
+      fallbackQueries: [need.query, ...fallbackQueriesFor(query)],
       type: isVideo ? "video" : "image",
       orientation,
       outputPath: path.join(jobDir, relPath),
       tracker,
-    })
-      .then((got) => got ? {
-        path: relPath,
-        type: isVideo ? "video" : "image",
-        sceneId: scene.id, startSec: scene.start, durationSec: scene.duration,
-        style: need.role === "inset" ? "inset" : "background",
-        alt: need.query,
-        license: got.license, sourceUrl: got.sourceUrl, source: got.source,
-        fromCache: got.fromCache === true,
-      } : null)
-      .catch(() => null);
-  });
+      kindPref: isVideo ? undefined : (isIcon ? "vector" : kindPrefFor(need.role)),
+      excludeIds: usedLibraryIds,
+      excludeHashes: usedHashes,
+      target,
+      visionTopic,
+      iconColor,
+    }).catch(() => null);
+    if (!r) continue;
+    if (r.libraryId) usedLibraryIds.add(r.libraryId);
+    if (r.phash) usedHashes.add(r.phash);
+    got.push({
+      // Honor the ACTUAL written file path — acquire may return a different extension than the
+      // requested .jpg (curated + Iconify return .svg). Using the fixed relPath here silently
+      // pointed the manifest at a nonexistent .jpg for SVG assets.
+      path: path.relative(jobDir, r.path).split(path.sep).join("/"),
+      type: isVideo ? "video" : "image",
+      sceneId: scene.id, startSec: scene.start, durationSec: scene.duration,
+      // Honor an asset's own role (Iconify returns style:"icon" → contained vectors pool).
+      style: r.style || (need.role === "inset" ? "inset" : "background"),
+      alt: need.query,
+      license: r.license, sourceUrl: r.sourceUrl, source: r.source,
+      fromCache: r.fromCache === true,
+    });
+  }
 
-  const got = (await Promise.all(tasks)).filter(Boolean);
   console.log(`[project] assets: ${pinned.length} real screenshot(s) + ${got.length}/${picks.length} acquired (${got.filter((a) => a.fromCache).length} from cache)`);
   return [...pinned, ...got];
 }
